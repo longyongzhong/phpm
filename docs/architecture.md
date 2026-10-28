@@ -156,7 +156,7 @@ This pipeline is not a published runtime backend. The client still uses its
 existing providers and local imports. Exported stage-A archives are unsigned;
 the first hosted build passed SDK rebuilding and fresh-container runtime/FPM
 checks (see `validation.md`). Independent-VM validation, cross-version upgrades,
-trusted distribution and production service management remain separate work.
+production trust-root distribution and service management remain separate work.
 
 ### Opt-in signed distribution
 
@@ -174,6 +174,10 @@ and real relocated execution precede store import. A signed-catalog install may
 update the provenance of an already identical local runtime; payload identity,
 existing environment identity and project files do not change. Upgrade preparation
 inherits the signed source; external modules bind to the exact runtime build.
+Remote packages reuse the validated bounded HTTP range reader used by StaticPHP;
+interrupted reads continue at received bytes within the operation. The final signed
+size/hash must match before committing cache entries. HTTPS hosting requires Range
+support; invalid ranges, changed totals and corrupt caches fail explicitly.
 
 `install --frozen --source NAME` looks up the locked build and hashes, restores its
 runtime and bundled/catalog modules and compares their final IDs/digests with the

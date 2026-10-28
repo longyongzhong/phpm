@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -94,7 +95,10 @@ func TestCatalogPackageVerifiesTLSSizeHashAndCache(t *testing.T) {
 	sum := sha256.Sum256(data)
 	p := catalog.Package{Filename: "runtime.tar.gz", SHA256: hex.EncodeToString(sum[:]), Size: int64(len(data))}
 	requests := 0
-	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { requests++; w.Write(data) }))
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		http.ServeContent(w, r, "runtime", time.Time{}, bytes.NewReader(data))
+	}))
 	defer server.Close()
 	s := testStore(t)
 	source := catalogSource{Location: server.URL + "/catalog.json"}
@@ -121,6 +125,37 @@ func TestCatalogPackageVerifiesTLSSizeHashAndCache(t *testing.T) {
 		if len(entries) != 0 {
 			t.Fatal("invalid download committed to cache")
 		}
+	}
+}
+
+func TestCatalogPackageResumesInterruptedHTTPSRange(t *testing.T) {
+	data := bytes.Repeat([]byte("a"), 2*1024*1024+123)
+	sum := sha256.Sum256(data)
+	p := catalog.Package{Filename: "runtime.tar.gz", SHA256: hex.EncodeToString(sum[:]), Size: int64(len(data))}
+	var ranges []string
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ranges = append(ranges, r.Header.Get("Range"))
+		if len(ranges) == 1 {
+			w.Header().Set("Content-Range", fmt.Sprintf("bytes 0-1048575/%d", len(data)))
+			w.Header().Set("Content-Length", "1048576")
+			w.WriteHeader(http.StatusPartialContent)
+			w.Write(data[:4096])
+			return // simulate a real network interruption
+		}
+		http.ServeContent(w, r, "runtime", time.Time{}, bytes.NewReader(data))
+	}))
+	defer server.Close()
+	s := testStore(t)
+	path, err := s.catalogPackage(context.Background(), catalogSource{Location: server.URL + "/catalog.json"}, p, server.Client())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ranges) != 3 || ranges[1] != "bytes=4096-1052671" {
+		t.Fatalf("did not resume from received bytes: %v", ranges)
+	}
+	actual, err := fileSHA(path)
+	if err != nil || actual != p.SHA256 {
+		t.Fatal("resumed download was not fully verified", err)
 	}
 }
 

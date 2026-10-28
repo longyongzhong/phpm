@@ -94,6 +94,10 @@ func (p linuxRuntimeProvider) download(ctx context.Context, raw, checksum string
 }
 
 func (p linuxRuntimeProvider) readRange(ctx context.Context, raw string, start, knownTotal int64) (data []byte, total int64, readErr, protocolErr error) {
+	return readPackageRange(ctx, p.Client, raw, start, knownTotal)
+}
+
+func readPackageRange(ctx context.Context, client *http.Client, raw string, start, knownTotal int64) (data []byte, total int64, readErr, protocolErr error) {
 	const chunk = int64(1024 * 1024)
 	const maxDownload = int64(512 * 1024 * 1024)
 	partCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
@@ -105,20 +109,20 @@ func (p linuxRuntimeProvider) readRange(ctx context.Context, raw string, start, 
 	req.Header.Set("User-Agent", "PHPM/"+Version)
 	req.Header.Set("Accept-Encoding", "identity")
 	req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", start, start+chunk-1))
-	response, err := p.Client.Do(req)
+	response, err := client.Do(req)
 	if err != nil {
 		return nil, 0, err, nil
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusPartialContent {
-		return nil, 0, nil, fmt.Errorf("StaticPHP range request returned HTTP %d, expected 206", response.StatusCode)
+		return nil, 0, nil, fmt.Errorf("PHP package range request returned HTTP %d, expected 206", response.StatusCode)
 	}
 	if encoding := response.Header.Get("Content-Encoding"); encoding != "" && encoding != "identity" {
-		return nil, 0, nil, errors.New("StaticPHP range response unexpectedly uses content encoding")
+		return nil, 0, nil, errors.New("PHP package range response unexpectedly uses content encoding")
 	}
 	fields := staticPHPContentRange.FindStringSubmatch(response.Header.Get("Content-Range"))
 	if fields == nil {
-		return nil, 0, nil, errors.New("StaticPHP range response has no valid Content-Range")
+		return nil, 0, nil, errors.New("PHP package range response has no valid Content-Range")
 	}
 	values := make([]int64, 3)
 	for i := range values {
@@ -129,15 +133,15 @@ func (p linuxRuntimeProvider) readRange(ctx context.Context, raw string, start, 
 	}
 	from, to, total := values[0], values[1], values[2]
 	if from != start || total <= 0 || total > maxDownload || to < from || to >= total || to-start >= chunk || (knownTotal != 0 && total != knownTotal) {
-		return nil, 0, nil, errors.New("StaticPHP range response has unexpected offset/size or changed archive length")
+		return nil, 0, nil, errors.New("PHP package range response has unexpected offset/size or changed archive length")
 	}
 	length := to - from + 1
 	if response.ContentLength >= 0 && response.ContentLength != length {
-		return nil, 0, nil, errors.New("StaticPHP Content-Length differs from Content-Range")
+		return nil, 0, nil, errors.New("PHP package Content-Length differs from Content-Range")
 	}
 	data, err = io.ReadAll(io.LimitReader(response.Body, length+1))
 	if int64(len(data)) > length {
-		return nil, 0, nil, errors.New("StaticPHP range body exceeds its declared size")
+		return nil, 0, nil, errors.New("PHP package range body exceeds its declared size")
 	}
 	if int64(len(data)) < length && err == nil {
 		err = io.ErrUnexpectedEOF

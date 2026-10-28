@@ -329,29 +329,50 @@ func (s *Store) catalogPackage(ctx context.Context, source catalogSource, p cata
 	if err != nil {
 		return "", err
 	}
-	var reader io.ReadCloser
-	if strings.HasPrefix(location, "https://") {
-		response, err := getHTTP(ctx, client, location)
-		if err != nil {
-			return "", err
-		}
-		reader = response.Body
-	} else {
-		f, err := os.Open(location)
-		if err != nil {
-			return "", err
-		}
-		reader = f
-	}
-	defer reader.Close()
 	f, err := os.CreateTemp(filepath.Join(s.Home, "cache"), ".catalog-*")
 	if err != nil {
 		return "", err
 	}
 	defer func() { f.Close(); os.Remove(f.Name()) }()
 	h := sha256.New()
-	n, copyErr := io.Copy(io.MultiWriter(f, h), io.LimitReader(reader, p.Size+1))
-	if err := errors.Join(copyErr, f.Close()); err != nil {
+	var n int64
+	writer := io.MultiWriter(f, h)
+	if strings.HasPrefix(location, "https://") {
+		noProgress := 0
+		for n < p.Size {
+			data, _, readErr, protocolErr := readPackageRange(ctx, client, location, n, p.Size)
+			if protocolErr != nil {
+				return "", protocolErr
+			}
+			if len(data) == 0 {
+				noProgress++
+				if ctx.Err() != nil {
+					return "", ctx.Err()
+				}
+				if noProgress >= 3 {
+					return "", fmt.Errorf("catalog package transfer made no progress at %d/%d bytes: %w", n, p.Size, readErr)
+				}
+				continue
+			}
+			noProgress = 0
+			written, err := writer.Write(data)
+			if err != nil {
+				return "", err
+			}
+			n += int64(written)
+		}
+	} else {
+		reader, err := os.Open(location)
+		if err != nil {
+			return "", err
+		}
+		var copyErr error
+		n, copyErr = io.Copy(writer, io.LimitReader(reader, p.Size+1))
+		if err := errors.Join(copyErr, reader.Close()); err != nil {
+			return "", err
+		}
+	}
+	if err := f.Close(); err != nil {
 		return "", err
 	}
 	if n != p.Size || hex.EncodeToString(h.Sum(nil)) != p.SHA256 {

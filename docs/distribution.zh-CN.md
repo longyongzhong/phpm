@@ -5,6 +5,20 @@ Ed25519 签名目录，并接入客户端安装、独立扩展、候选升级和
 范围仍是 Debian 13 x86_64、glibc 2.41、NTS。其他 Linux、iStoreOS 和 macOS
 不能使用此目标包。现有无 `--source` 的安装行为不变。
 
+首次实际验收已通过：[阶段 B 工作流](https://github.com/longyongzhong/phpm/actions/runs/40681164443)，
+包含签名安装、Composer 补扩展、空存储按锁恢复与候选回退。
+对应代码的[跨平台 CI](https://github.com/longyongzhong/phpm/actions/runs/40681126574)也已通过。
+
+## Debian 运行库
+
+目标机器不需要 PHP、Go 或编译器，但需要动态运行库。由服务器管理员按现有运维流程
+安装 `build/linux/runtime-packages.txt` 中的软件包；PHPM 不自动提权或修改系统包：
+
+```sh
+sudo apt-get update
+sudo apt-get install --no-install-recommends ca-certificates libc6 libcurl4t64 libjpeg62-turbo libonig5 libpng16-16t64 libsqlite3-0 libssl3t64 libxml2 libzip5 tzdata zlib1g
+```
+
 ## 使用可信源
 
 首次使用前，从维护者的独立可信渠道获取公钥并核对 SHA-256 指纹。
@@ -13,6 +27,9 @@ PHPM 不会自动信任下载目录中的公钥，也不会自动替换已经注
 
 将完整 bundle 保存在一个固定目录，或把其中每个文件作为同一 HTTPS 目录的文件托管。
 目录必须包含 `catalog.json`、`catalog.json.sig` 和其列出的包。
+远端包托管服务必须支持 HTTP Range/206（GitHub Release 资产支持），客户端按限量分段
+获取，遇到中断从本次操作已收到的字节继续，完整摘要匹配后才提交缓存。进程退出后
+未完成的临时下载不会作为缓存保留。目录与签名文件仍使用普通 HTTPS 请求。
 
 ```sh
 # 私有仓库阶段：登录 GitHub 下载并解压构建产物，使用本地目录。

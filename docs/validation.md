@@ -437,3 +437,55 @@ The downloaded copy is retained in ignored `bin/`; reports are retained in ignor
 MySQL connectivity, Debian cross-version upgrades, signed distribution, a client
 download backend and production service switching are outstanding. No iStoreOS
 compatibility or production deployment result is implied by this Debian run.
+
+### Signed distribution and exact-lock hydration (2026-10-28)
+
+Source commit `6197e0f2e7840ebe852f23b9f244327df8689c8d` passed
+[CI run 40681126574](https://github.com/longyongzhong/phpm/actions/runs/40681126574):
+Windows/macOS/Ubuntu native PHP integration and vet, plus Linux bootstrap. Local
+Windows native PHP 8.4.27, Composer 2.10.3 and Redis 6.1.0/6.2.0 fixtures also passed
+`go test -count=1 ./...` (21.141 seconds for the PHPM package), followed by vet.
+New tests check signatures, wrong keys, duplicate/unknown JSON fields, expiry,
+sequence replay, changed same-sequence bytes, package hash/size and cached-file
+corruption. The HTTPS unit fixture needs loopback networking; the initial sandbox
+run was denied by Windows socket permissions, then passed with that access.
+
+[Stage-B run 40681164443](https://github.com/longyongzhong/phpm/actions/runs/40681164443)
+reused the successful stage-A run `40666487813`, checked its workflow/status and
+downloaded its actual accepted PHP 8.4.27/SDK/Redis 6.3.0 packages. The independent
+Debian 13 container had runtime libraries but no host PHP/compiler and ran without
+root or external networking. Its signed client lifecycle passed (4.24 seconds;
+the complete container/build step took 57 seconds). It exercised a real loopback
+HTTPS server and explicit public-key pin, signed PHP download/install, bundled
+curl and signed Redis via Composer `--missing`, actual extension loading and
+frozen install. It then restored the exact lock into an empty PHPM_HOME without
+rewriting project files, prepared a source-inherited candidate, rebound its signed
+extension and activated/rolled back the exact original project pair.
+
+Negative native checks rejected altered signed metadata, a corrupt cache file,
+an older correctly signed catalog and an expired catalog, while preserving active
+project files. The alternate payload is a same-version test marker fixture; its
+catalog is created directly by test code, without fabricating native build gate
+reports. That fixture package is not exported as a release artifact.
+
+The workflow generated an ephemeral Ed25519 signing key in test memory and exported
+only the public key, signed catalog, unmodified original packages and verification
+report. Its test catalog has a one-hour lifetime. Production signing keys are not
+created or configured by this run. A separate least-permission job created draft
+prerelease `stage-b-test-40681164443` (release ID `426591726`); API inspection confirmed
+`draft=true` and `prerelease=true`. The repository remained private and no Release
+was published. Its ZIP asset is 15194184 bytes with GitHub-reported SHA-256
+`398db664d70faacd7b8a3c4998978f55e4351191c7a0a63ed3fedbb4606ebdd9`.
+
+Local maintainer-tool smoke checks also signed the accepted stage-A packages with
+a separate local test key, registered that source in an isolated inspection home
+and listed its catalog. The Windows client correctly refused to install Debian
+packages. Updated Windows/Linux CLI and offline signing-tool binaries were built
+under ignored `bin/`; no business project or system PHP was modified.
+
+These results do not establish a production trust root, private-GitHub asset API
+authentication in the client, independent-VM compatibility, real cross-version
+PHP upgrades or service deployment/health rollback. The single-key protocol does
+not implement TUF, automatic key rotation or revocation. See
+[the distribution guide](distribution.zh-CN.md) for the explicit trust decision and
+current installation/restoration commands.

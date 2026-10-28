@@ -322,7 +322,8 @@ Existing extension version mismatches and PHP/system-library failures require
 explicit resolution first. PHP and existing extension versions are not implicitly
 upgraded. Use, for example, `phpm ext install redis@6.2.0` to explicitly change an
 existing extension. Batch downloads use the existing Windows x64 provider;
-Linux/macOS retain bundled-module support without automatic source builds.
+Linux/macOS retain bundled-module support without automatic source builds;
+the explicit signed Debian provider can also acquire its matching Redis package.
 `--missing` targets the current environment only and cannot be combined with an
 extension name, checksum pin or loader option.
 
