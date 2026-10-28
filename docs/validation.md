@@ -590,3 +590,76 @@ application acceptance, sustained high-concurrency qualification, production
 service/traffic switching or formal signing-key operations. Those remain deferred.
 The workflow requires explicit successful base/target run IDs rather than keeping
 a default reference to an artifact that will expire after its retention period.
+
+## Offline-root authorization and client distribution (2026-10-28)
+
+The operator chose to generate and back up both formal root and publishing private
+keys offline. No formal key was generated, stored in GitHub Secrets, or published
+by this work. CI creates disposable, short-lived test keys only. The repository
+was confirmed private after the final draft upload.
+
+`029773ce7d54c8d7ca04c0822a901886489812d3` added role-separated Ed25519 root
+authorization, publishing-key rotation/revocation, persistent source rollback and
+revocation state, explicit manual root replacement, signed client archives with
+full dependency notices, and a Python/OpenSSL bootstrap verifier. Legacy direct-key
+sources remain compatible and root-authorized sources cannot downgrade to them.
+
+Local Windows native PHP/Composer/two-Redis regression passed (`internal/phpm`
+24.899 seconds), along with vet and independent Go→Python/OpenSSL signature
+verification for both archive formats. The 16 Linux helper tests completed with
+15 passes and the optional real-upstream-signature-input test skipped; prior
+stage-A upstream signature verification remains separately recorded above.
+Bootstrap tests reject duplicate JSON, unsafe archive entries, links, duplicate
+entries and missing notices. Final tests also cover bounded Windows rename retries,
+existing destinations, private-only draft creation, existing releases and uploaded
+asset digest mismatch. Unit fixture bytes are not native runtime evidence.
+
+[Independent VM run 40716970516](https://github.com/longyongzhong/phpm/actions/runs/40716970516)
+passed on `029773c` with 23 checks. The downloaded artifact `12828378248` matched
+SHA-256 `8ea226b194c647cd50d66373dc1da486634322a91ba4c1910ddb6b35e22265ce`
+and contained only the two JSON reports and three logs. Reports are retained at
+`.cache/vm-report-12828378248/` locally. The non-root Debian guest installed the
+signed Linux client over TLS through the Python/OpenSSL installer, using an
+ephemeral root fingerprint delivered by the controlled SSH fixture, registered
+the root-authorized PHP source and completed the full existing real-version
+lifecycle. Observed versions were `8.4.27 → 8.5.12 → 8.4.27`; both CLI and FPM
+exercised MySQL 8.4.13 and Redis, including 41 soak rounds in 122.87 seconds.
+Original project bytes and database data survived rollback. This is built-in,
+bounded acceptance, not business application or long-duration load qualification.
+
+[All four CI jobs on 029773c](https://github.com/longyongzhong/phpm/actions/runs/40716881154)
+passed. The first draft rehearsal uploaded 23 assets but failed its final check:
+GitHub's release-by-tag endpoint does not return unpublished drafts. The publisher
+now retains the creation response's numeric Release ID and checks that exact
+draft, asset names, sizes and SHA-256 digests; it does not skip final verification.
+[The corrected rehearsal](https://github.com/longyongzhong/phpm/actions/runs/40718128089)
+and [its cross-platform CI](https://github.com/longyongzhong/phpm/actions/runs/40718120035)
+passed on `3c8a87e`.
+
+The real Windows client from the first draft was downloaded with GitHub asset
+digest checks, independently verified by the installer and executed successfully
+from `.cache/client-preview-windows-retry/`. The first final-directory rename
+returned Windows error 5; a fresh attempt succeeded. The installer now retries
+only Windows sharing/access conflicts at the final verified rename for at most
+three seconds; validation failures and existing destinations are never retried
+as successful installations. Archive and draft-boundary suites contain six and
+four passing tests respectively.
+
+[Final stage-D rehearsal 40718873415](https://github.com/longyongzhong/phpm/actions/runs/40718873415)
+passed on `97600dda912087cc99abbbda4f0da509acddd0d9`, including the rename change
+and publishing regression tests. [All four final CI jobs](https://github.com/longyongzhong/phpm/actions/runs/40718867675)
+also passed on that commit (Windows, Linux, macOS and interpreter-free Linux
+bootstrap). Subsequent edits only align CLI help text and record these results;
+the source-trust checks and Windows CLI build passed after the help edit.
+The rehearsal created private draft `426868100`, tag
+`stage-d-test-40718873415`, with 23 individually uploaded, digest-verified assets:
+[review the test draft](https://github.com/longyongzhong/phpm/releases/tag/untagged-6c3602f577e99817132d).
+Its keys are disposable and metadata expires after 48 hours. These assets must
+not be adopted as the formal production trust root. Earlier drafts are retained
+as inspection evidence. No public release or production deployment occurred.
+
+Formal operator commands and first-install trust limitations are documented in
+`docs/offline-release.zh-CN.md`. Formal key generation/backup and offline signing
+remain operator actions. Business-project acceptance, long-term qualification,
+production FPM/traffic switching and additional OS/architecture targets remain
+outside this milestone.
