@@ -39,15 +39,21 @@ def main():
     notes = ("Disposable TEST keys; not a production trust root.\n" if args.test_preview else "Offline-signed candidate awaiting operator review.\n")
     notes += f"Client: {result['version']}\nSource: {result['commit']}\nRoot SHA-256: {args.fingerprint}\n"
     notes += "Individual signed assets are retained here. No private keys are included. This tool only creates drafts.\n"
+    pages = json.loads(gh("api", "--paginate", "--slurp", f"repos/{args.repo}/releases?per_page=100"))
+    if any(release["tag_name"] == args.tag for page in pages for release in page):
+        raise ValueError("release tag already has a release; existing drafts/assets were not changed")
     with tempfile.TemporaryDirectory(prefix="phpm-release-notes-") as temporary:
-        path = Path(temporary) / "notes.txt"
-        path.write_text(notes, encoding="utf-8")
-        # An existing release causes gh to fail. Never replace existing assets.
-        print(gh("release", "create", args.tag, "--repo", args.repo, "--target", result["commit"], "--draft", "--prerelease",
-                 "--title", f"PHPM {result['version']}", "--notes-file", path).strip())
+        path = Path(temporary) / "request.json"
+        path.write_text(json.dumps({"tag_name": args.tag, "target_commitish": result["commit"], "draft": True,
+            "prerelease": True, "name": f"PHPM {result['version']}", "body": notes}), encoding="utf-8")
+        created = json.loads(gh("api", f"repos/{args.repo}/releases", "--input", path))
+        if not created["draft"]:
+            raise ValueError("GitHub did not create the requested draft")
+        print(created["html_url"])
     for start in range(0, len(assets), 20):
         gh("release", "upload", args.tag, *assets[start:start+20], "--repo", args.repo)
-    release = json.loads(gh("api", f"repos/{args.repo}/releases/tags/{args.tag}"))
+    # Drafts are not available through the published-release-by-tag endpoint.
+    release = json.loads(gh("api", f"repos/{args.repo}/releases/{created['id']}"))
     expected = {path.name for path in assets}
     if not release["draft"] or {a["name"] for a in release["assets"]} != expected:
         raise ValueError("draft asset set does not match the signed bundle; inspect the draft")
