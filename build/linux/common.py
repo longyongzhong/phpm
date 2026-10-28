@@ -38,8 +38,10 @@ def write_json(path, value):
     Path(path).write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
-def load_recipe(root):
-    recipe = json.loads((root / "recipe.json").read_text(encoding="utf-8"))
+def load_recipe(root, filename="recipe.json"):
+    if filename not in ("recipe.json", "recipes/php-8.5.json"):
+        raise ValueError("unsupported recipe file")
+    recipe = json.loads((root / filename).read_text(encoding="utf-8"))
     if recipe["schema"] != 1 or recipe["target"] != "debian13-x86_64-nts":
         raise ValueError("unsupported recipe schema/target")
     if not re.fullmatch(r"debian:13-slim@sha256:[a-f0-9]{64}", recipe["base_image"]):
@@ -63,9 +65,10 @@ def load_recipe(root):
         if url.scheme != "https" or url.netloc != host or url.path != expected or url.query or url.fragment:
             raise ValueError("source must use its fixed official HTTPS release URL")
     php = recipe["php"]
-    if not php["version"].startswith("8.4.") or php["signature_url"] != php["url"] + ".asc":
-        raise ValueError("this recipe requires PHP 8.4 and its detached release signature")
-    if not re.fullmatch(r"[A-F0-9]{40}", php["signer"]) or php["key"] != "keys/php-8.4.asc":
+    minor = ".".join(php["version"].split(".")[:2])
+    if minor not in ("8.4", "8.5") or php["signature_url"] != php["url"] + ".asc":
+        raise ValueError("this recipe requires supported PHP and its detached release signature")
+    if not re.fullmatch(r"[A-F0-9]{40}", php["signer"]) or php["key"] != f"keys/php-{minor}.asc":
         raise ValueError("invalid PHP release key pin")
     if not (root / php["key"]).is_file():
         raise ValueError("vendored PHP release key is missing")
@@ -83,8 +86,8 @@ def load_recipe(root):
     return recipe
 
 
-def verify_inputs(root, directory, gpg="gpg", gpgv="gpgv"):
-    recipe = load_recipe(root)
+def verify_inputs(root, directory, gpg="gpg", gpgv="gpgv", filename="recipe.json"):
+    recipe = load_recipe(root, filename)
     for name in ("php", "redis", "composer"):
         item = recipe[name]
         path = directory / Path(urlparse(item["url"]).path).name

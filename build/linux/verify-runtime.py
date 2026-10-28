@@ -68,6 +68,7 @@ def main():
         raise ValueError("runtime checks require a non-root user and no system PHP/compiler")
     packages = Path("/packages")
     result = json.loads((packages / "build-result.json").read_text())
+    minor = ".".join(result["php_version"].split(".")[:2])
     checks = []
     with tempfile.TemporaryDirectory(prefix="phpm-runtime-check-") as temp:
         root = Path(temp)
@@ -118,10 +119,12 @@ def main():
             return command("exec", "--", "php", "-r", code, "--", *args)
 
         command("php", "import", runtime)
-        command("init", "--php", "8.4")
+        command("init", "--php", minor)
         command("install")
         for module in sorted(runtime.glob("ext/*.so")):
             command("ext", "install", module.stem)
+        if not (runtime / "ext/opcache.so").exists():
+            command("ext", "install", "opcache")
         redis = extracted["redis"] / "redis.so"
         command("ext", "import", f"redis@{result['recipe']['redis']['version']}",
                 "--file", redis, "--sha256", sha256(redis))
@@ -129,8 +132,9 @@ def main():
         selected = json.loads(command("info"))
         extensions = {item["name"]: item["version"] for item in selected["extensions"]}
         extensions["redis"] = result["recipe"]["redis"]["version"]
+        extensions["opcache"] = result["php_version"]
         # JSON is valid YAML; this is an owned fixture, not an edit of a user file.
-        write_json(project / "phpm.yaml", {"schema": 1, "php": "8.4", "runtime": selected["runtime"]["id"],
+        write_json(project / "phpm.yaml", {"schema": 1, "php": minor, "runtime": selected["runtime"]["id"],
                    "extensions": extensions, "ini": {"memory_limit": "192M"}})
         command("install")
         command("verify")
@@ -142,7 +146,7 @@ def main():
         checks += ["phpm-import", "bundled-extension-install", "separate-redis-import", "frozen-install", "pdo-sqlite", "localhost-dns"]
         other = root / "other-project"
         other.mkdir()
-        write_json(other / "phpm.yaml", {"schema": 1, "php": "8.4", "runtime": selected["runtime"]["id"],
+        write_json(other / "phpm.yaml", {"schema": 1, "php": minor, "runtime": selected["runtime"]["id"],
                    "ini": {"memory_limit": "256M"}})
         command("install", cwd=other)
         isolated = json.loads(command("exec", "--", "php", "-r",
@@ -186,7 +190,7 @@ def main():
         checks += ["curl-https-with-ca-verification", "openssl-https-with-ca-verification"]
 
         write_json(project / "composer.json", {"name": "phpm/source-build-test", "version": "1.0.0",
-                   "require": {"php": "^8.4", **{f"ext-{name}": "*" for name in
+                   "require": {"php": "^" + minor, **{f"ext-{name}": "*" for name in
                                ("json", "curl", "openssl", "mbstring", "pdo_mysql", "redis", "zip")}}})
         command("ext", "check")
         command("ext", "install", "--missing")

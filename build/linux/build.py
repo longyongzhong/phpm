@@ -23,7 +23,7 @@ CONTEXT_FILES = ("Dockerfile", "recipe.json", "build-packages.txt", "runtime-pac
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
-    commands.add_parser("check", help="validate the recipe without Docker or network")
+    check = commands.add_parser("check", help="validate the recipe without Docker or network")
     inputs = commands.add_parser("verify-inputs", help="verify previously downloaded official sources")
     inputs.add_argument("directory", type=Path)
     inputs.add_argument("--gpg", default="gpg")
@@ -32,8 +32,11 @@ def main():
     build.add_argument("--output", type=Path, required=True, help="new or empty output directory")
     build.add_argument("--inputs", type=Path, help="optional verified source cache")
     build.add_argument("--jobs", type=int, default=2, choices=range(1, 33))
+    for command in (check, inputs, build):
+        command.add_argument("--php", choices=("8.4", "8.5"), default="8.4", help="pinned PHP recipe")
     args = parser.parse_args()
-    recipe = load_recipe(ROOT)
+    recipe_name = "recipe.json" if args.php == "8.4" else "recipes/php-8.5.json"
+    recipe = load_recipe(ROOT, recipe_name)
     for name in CONTEXT_FILES:
         if not (ROOT / name).is_file():
             raise ValueError(f"build file is missing: {name}")
@@ -41,7 +44,7 @@ def main():
         print(f"Recipe valid: PHP {recipe['php']['version']}, Redis {recipe['redis']['version']}, {recipe['target']}")
         return
     if args.command == "verify-inputs":
-        verify_inputs(ROOT, args.directory.resolve(), args.gpg, args.gpgv)
+        verify_inputs(ROOT, args.directory.resolve(), args.gpg, args.gpgv, recipe_name)
         return
     if not shutil.which("docker") or not shutil.which("go"):
         raise ValueError("the build host needs Docker BuildKit and Go >= 1.23; production hosts do not")
@@ -58,7 +61,7 @@ def main():
         if context.parent != destination.parent:
             raise ValueError("temporary build context escaped the output parent")
         for name in CONTEXT_FILES:
-            shutil.copyfile(ROOT / name, context / name)
+            shutil.copyfile(ROOT / (recipe_name if name == "recipe.json" else name), context / name)
         shutil.copytree(ROOT / "keys", context / "keys")
         (context / "inputs").mkdir()
         if args.inputs:

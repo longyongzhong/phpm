@@ -5,7 +5,7 @@
 
 ## 当前目标
 
-- Debian 13 x86_64、PHP 8.4.27 NTS、Redis 6.3.0。
+- Debian 13 x86_64、PHP 8.4.27 / 8.5.12 NTS、Redis 6.3.0。
 - 独立 CLI/FPM 运行时、可选共享扩展、配套开发工具包。
 - GitHub Actions 手动构建，先完成实际编译和安装验证，再设计正式发布。
 - 生产机器不需要编译器，但需要 `runtime-packages.txt` 中的 Debian 运行库。
@@ -23,6 +23,8 @@
    `keys/php-8.4.asc` 是必须包含的公开验证密钥。
 2. 工作流文件进入默认分支后，在 **Actions** 中启用工作流。
 3. 选择 **Debian PHP source build (stage A)**，点击 **Run workflow**。
+   选择固定配方 `8.4` 或 `8.5`。8.5 配方使用该系列独立发布公钥；OPcache 按上游规则
+   内置进 PHP，不再要求独立 opcache.so。
 4. 等待 `Build packages and run SDK/fresh-container checks` 完成。失败时查看该步骤
    日志；不会把失败的构建作为成功产物上传。
 5. 成功后，在本次运行的 **Artifacts** 中下载
@@ -41,6 +43,10 @@
 python3 build/linux/build.py check
 python3 -m unittest discover -s build/linux/tests -v
 python3 build/linux/build.py build --output .cache/debian13-stage-a
+
+# 独立构建第二版；输出目录必须不同。
+python3 build/linux/build.py check --php 8.5
+python3 build/linux/build.py build --php 8.5 --output .cache/debian13-php85
 ```
 
 输出目录必须不存在或为空，已有文件不会被清除。Docker 只接收临时组装的最小上下文：

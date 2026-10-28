@@ -2,6 +2,12 @@ name: Debian PHP source build (stage A)
 
 on:
   workflow_dispatch:
+    inputs:
+      php:
+        description: Pinned PHP source recipe
+        type: choice
+        default: '8.4'
+        options: ['8.4', '8.5']
 
 permissions:
   contents: read
@@ -17,11 +23,15 @@ jobs:
           go-version-file: go.mod
           cache: true
       - name: Validate pinned recipe and build helpers
+        env:
+          PHP_SERIES: ${{ inputs.php || '8.4' }}
         run: |
-          python3 build/linux/build.py check
+          python3 build/linux/build.py check --php "$PHP_SERIES"
           python3 -m unittest discover -s build/linux/tests -v
       - name: Build packages and run SDK/fresh-container checks
-        run: python3 build/linux/build.py build --output "$RUNNER_TEMP/phpm-debian13-build"
+        env:
+          PHP_SERIES: ${{ inputs.php || '8.4' }}
+        run: python3 build/linux/build.py build --php "$PHP_SERIES" --output "$RUNNER_TEMP/phpm-debian13-build"
       - name: Retain unpublished packages and verification reports
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:

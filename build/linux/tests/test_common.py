@@ -26,6 +26,7 @@ class RecipeTests(unittest.TestCase):
         for name in ("recipe.json", "configure-flags.txt", "build-packages.txt", "runtime-packages.txt"):
             shutil.copyfile(ROOT / name, self.root / name)
         shutil.copytree(ROOT / "keys", self.root / "keys")
+        shutil.copytree(ROOT / "recipes", self.root / "recipes")
 
     def change(self, key, value):
         recipe = json.loads((self.root / "recipe.json").read_text())
@@ -37,6 +38,16 @@ class RecipeTests(unittest.TestCase):
 
     def test_checked_in_recipe(self):
         self.assertEqual(load_recipe(self.root)["target"], "debian13-x86_64-nts")
+        other = load_recipe(self.root, "recipes/php-8.5.json")
+        self.assertEqual(other["php"]["version"], "8.5.12")
+        self.assertEqual(other["php"]["key"], "keys/php-8.5.asc")
+
+    def test_recipe_version_cannot_use_another_series_key(self):
+        self.change(("php", "key"), "keys/php-8.5.asc")
+        with self.assertRaises(ValueError):
+            load_recipe(self.root)
+        with self.assertRaises(ValueError):
+            load_recipe(self.root, "../../untrusted.json")
 
     def test_refuses_mutable_base_or_bad_source_identity(self):
         for key, value in [("base_image", "debian:13-slim"), (("php", "url"), "https://evil.example/php.tar.xz"),

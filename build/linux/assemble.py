@@ -82,6 +82,10 @@ def main():
     extract_archive(downloads / f"php-{recipe['php']['version']}.tar.xz", WORK / "php-source")
     php_source = WORK / "php-source" / f"php-{recipe['php']['version']}"
     flags = read_lines(ROOT / "configure-flags.txt")
+    # PHP 8.5 makes OPcache part of the binary; the old configure switch and
+    # a separate opcache.so are no longer applicable to that upstream series.
+    if recipe["php"]["version"].startswith("8.5."):
+        flags.remove("--enable-opcache")
     run(["./configure", *flags], cwd=php_source, env=env)
     run(["make", f"-j{jobs}"], cwd=php_source, env=env)
     run(["make", "test", "TESTS=tests/basic ext/json/tests ext/pdo_sqlite/tests",
@@ -96,6 +100,10 @@ def main():
     for module in sorted((installed / "lib/php/extensions").rglob("*.so")):
         copy_file(module, runtime / "ext" / module.name)
     expected = {"bcmath", "curl", "exif", "fileinfo", "gd", "mbstring", "opcache", "pdo_mysql", "sockets", "zip"}
+    if recipe["php"]["version"].startswith("8.5."):
+        expected.remove("opcache")
+        if output([runtime / "bin/php", "-n", "-r", "echo extension_loaded('Zend OPcache') ? 'yes' : 'no';"]) != "yes":
+            raise ValueError("PHP 8.5 must provide built-in OPcache")
     if {p.stem for p in (runtime / "ext").glob("*.so")} != expected:
         raise ValueError("built shared module set differs from the recipe")
     copy_file(installed / "bin/php", sdk / "bin/php")
