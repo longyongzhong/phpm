@@ -151,7 +151,8 @@ Redis/TLS and a real FPM request before packages can be exported.
 
 This pipeline is not a published runtime backend. The client still uses its
 existing providers and local imports. Exported stage-A archives are unsigned;
-actual Actions execution, independent-VM validation, cross-version upgrades,
+the first hosted build passed SDK rebuilding and fresh-container runtime/FPM
+checks (see `validation.md`). Independent-VM validation, cross-version upgrades,
 trusted distribution and production service management remain separate work.
 
 ## Sources used for the initial adapters

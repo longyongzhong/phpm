@@ -1,8 +1,9 @@
 # PHPM
 
-Linux 官方源码构建已提供阶段 A 的手动 GitHub Actions 入口，面向 Debian 13 x64。
-操作和范围见 [构建说明](build/linux/README.zh-CN.md)。它生成待验证的未签名包，
-尚未接入客户端默认下载源，也未宣称生产可用。
+Linux 官方源码构建已在 GitHub Actions 完成首次验证，面向 Debian 13 x64，
+通过 SDK 迁移重编译、运行时、扩展和 FPM 检查。
+操作和范围见 [构建说明](build/linux/README.zh-CN.md)。产物仍是阶段 A 未签名包，
+尚未接入客户端默认下载源，当前不承诺生产可用。
 
 [English](README.md)
 

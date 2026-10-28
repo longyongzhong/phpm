@@ -360,3 +360,80 @@ run will leave independent-VM validation, real MySQL connectivity, cross-version
 PHP upgrades, signed distribution and production service switching outstanding.
 The lifecycle fixture deliberately uses two payload revisions of the same PHP
 version. Stage-A artifacts are unpublished and unsigned.
+
+### First private GitHub executions (2026-10-28)
+
+The user created `longyongzhong/phpm` as a private repository and completed the
+initial push. Subsequent API reads confirmed private visibility. Source changes
+were committed and pushed without including `.cache`, local runtimes or binaries.
+No public Release or visibility change was made.
+
+Real hosted runs uncovered portability problems absent from the local Windows
+fixture: PHP canonicalizes Windows short paths and macOS directory aliases;
+comparing their textual spelling rejected the correct INI file. Verification now
+requires both absolute paths to identify the same existing regular file using
+`os.SameFile`. Different files with identical contents, missing files and directory
+paths are rejected. Native PHP executable assertions use the same identity check.
+The StaticPHP fixture also now expects modules already compiled into its runtime,
+while continuing to check independently imported extension versions when supplied.
+
+Composer checks canonicalize the selected PHAR path before forming its archive URL
+and deprecation boundary. Windows archive spelling uses the filesystem's usual
+case-insensitive comparison. A native fixture proves that a deprecation emitted
+outside the selected PHAR is still a checker failure. Hosted CI supplies a pinned
+Composer PHAR explicitly, since the macOS setup can provide an unpacked launcher.
+
+The [CI run on a581ad4](https://github.com/longyongzhong/phpm/actions/runs/40664528880)
+passed Windows, macOS and Ubuntu native fixtures plus Go vet. Its Linux bootstrap
+also passed an actual StaticPHP 8.4.27 -> 8.5.12 -> 8.4.27 lifecycle. This is hosted
+Linux evidence, not an iStoreOS execution result. The subsequent code commit
+`3f75983` also passed [all four CI jobs](https://github.com/longyongzhong/phpm/actions/runs/40666364363).
+
+The first Debian source run stopped because Debian's minimal dependency closure
+did not include `gpgv`; it is now an explicit build package. The next source run
+verified official inputs, compiled PHP and Redis, and passed relocated SDK Redis
+rebuilding/loading. Its selected upstream PHP test subset reported 289 passes,
+98 skips, one upstream expected failure, zero warnings and zero unexpected
+failures (388 cases total). It then correctly failed the fresh-container HTTPS
+gate: the Python fixture omitted a response length and OpenSSL rejected socket EOF.
+The fixture now sends HTTP/1.1 with Content-Length. A regression test reads two
+complete responses on one connection, and local real PHP cURL/OpenSSL HTTPS
+requests passed with the explicit CA and normal certificate verification.
+
+### Successful Debian source build (2026-10-28)
+
+[Run 40666487813](https://github.com/longyongzhong/phpm/actions/runs/40666487813)
+passed on source commit `3f75983cc1059d80559a55ace06ec5beb9ce8a59`.
+The build/SDK/fresh-container step took 9 minutes 57 seconds. It verified the pinned
+PHP source hash and release signature and produced PHP 8.4.27 NTS CLI/FPM, matching
+SDK and Redis 6.3.0 packages for Debian 13 x86_64 (glibc 2.41). The upstream subset
+again reported 289 passes, 98 skips, one expected failure and no unexpected
+failures or warnings. Build-helper tests reported 10 passes and one optional
+real-source fixture skip; source signature verification ran in the actual build.
+
+The SDK report records all six checks passing, including rebuilding and loading
+Redis after relocation. The fresh-container report records all 17 checks passing:
+archive and ELF dependencies, non-root relocated PHP, PHPM imports, bundled and
+separate extensions, frozen install, SQLite, DNS, two-project INI/extension
+isolation, real Redis read/write, CA-verified cURL/OpenSSL HTTPS, Composer platform
+checks, a non-root FastCGI/FPM request, and payload activation/rollback. The last
+fixture uses two payload revisions of the same PHP version; it is not evidence
+for a Debian cross-version upgrade.
+
+Build ID: `php-8.4.27-debian13-x86_64-nts-b1-34e4dcbaefca`.
+Artifact `12806239145` was downloaded locally and checked against GitHub's ZIP
+SHA-256 `e89d72cf95b8fddb37f07bc42cac728b69970057506ef64b89611b1d7bf46cde`.
+All three enclosed package sizes and SHA-256 values matched `build-result.json`:
+
+| Package | Bytes | SHA-256 |
+|---|---:|---|
+| runtime | 10018484 | `e8ca695386afe0cf038e2469234624be5b7381f6981abe64996a934d2d4b4bca` |
+| SDK | 5100340 | `c23d27c1a64342ee0047a542e3f0a901fa6f3d542b57e5d910b93254ae8f5279` |
+| Redis | 252028 | `3f34dbf0e7cbb4886d069607504db362f4b77ea082b710e18a413158d097334a` |
+
+The private Actions artifact expires on 2026-11-11 and is not a public Release.
+The downloaded copy is retained in ignored `bin/`; reports are retained in ignored
+`.cache/`. These remain unsigned stage-A packages. Independent-VM testing, real
+MySQL connectivity, Debian cross-version upgrades, signed distribution, a client
+download backend and production service switching are outstanding. No iStoreOS
+compatibility or production deployment result is implied by this Debian run.

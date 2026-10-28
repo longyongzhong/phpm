@@ -24,15 +24,16 @@ This is an initial **0.1.0-dev** implementation, not a production deployment too
 | Prepare/test/activate/rollback project PHP upgrades | Implemented | Linux x64 StaticPHP downloads or preimported runtimes; compatible cached/bundled extensions |
 | FPM, service restart, production deployment, garbage collection | Not implemented | Not implemented |
 
-Platform code is cross-compiled locally. Native integration tests require PHP
-and are included in the CI workflow; a workflow file is not evidence that CI has
-already run. See [validation notes](docs/validation.md) for actual local results.
+Native integration tests and Go vet passed on hosted Windows, macOS and Ubuntu;
+the Linux bootstrap also passed its download/upgrade/rollback checks. See
+[validation notes](docs/validation.md) for exact runs and remaining limitations.
 
 The manual `Debian PHP source build (stage A)` workflow prepares PHP/Redis/SDK
 archives and runs fresh-container checks before exporting unpublished, unsigned
 artifacts. It does not change the CLI's Linux download source or publish Releases.
-See the [source-build guide](build/linux/README.zh-CN.md); an actual Actions run is
-still required before treating its native checks as passed.
+The [first successful source build](https://github.com/longyongzhong/phpm/actions/runs/40666487813)
+passed SDK relocation/rebuilding and fresh-container runtime/FPM checks on Debian
+13 x64. See the [source-build guide](build/linux/README.zh-CN.md) for its scope.
 
 ## Build
 

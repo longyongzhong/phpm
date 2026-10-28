@@ -11,6 +11,11 @@
 - 生产机器不需要编译器，但需要 `runtime-packages.txt` 中的 Debian 运行库。
 - Debian 包不能直接用于 OpenWrt/iStoreOS；当前不承诺其他发行版或架构兼容。
 
+2026-10-28 的[首次成功构建](https://github.com/longyongzhong/phpm/actions/runs/40666487813)
+已生成 PHP 8.4.27 CLI/FPM、SDK 和 Redis 6.3.0 包，通过 SDK 迁移重编译及
+全新 Debian 容器内的 17 项运行时检查。完整结果与限制见
+[验证记录](../../docs/validation.md)。这不代表其他发行版或生产服务已验证。
+
 ## 在 GitHub 上运行
 
 1. 将完整项目上传到 GitHub 仓库，包含 `go.mod`、`go.sum`、Go 源码、此目录和
