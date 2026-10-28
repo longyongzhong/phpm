@@ -489,3 +489,32 @@ PHP upgrades or service deployment/health rollback. The single-key protocol does
 not implement TUF, automatic key rotation or revocation. See
 [the distribution guide](distribution.zh-CN.md) for the explicit trust decision and
 current installation/restoration commands.
+
+### Final transfer and artifact verification (2026-10-28)
+
+Large-file downloads on this workstation repeatedly timed out, while bounded
+range requests progressed. Signed remote packages now reuse the strict range
+reader already used by StaticPHP. A TLS regression deliberately truncates the
+first 1 MiB response after 4096 bytes, verifies the next request starts at byte
+4096 and checks the complete final hash before cache commit. Existing range
+protocol checks, the full Go suite and vet passed after this change.
+
+Code commit `e48bd97522817455bfc1591492fcd4ff43815f64` passed all four jobs in
+[CI run 40684786008](https://github.com/longyongzhong/phpm/actions/runs/40684786008)
+and repeated the complete fresh-Debian signed distribution lifecycle in
+[run 40684837869](https://github.com/longyongzhong/phpm/actions/runs/40684837869).
+The latter left draft creation disabled, avoiding a duplicate draft. Windows/Linux
+client and maintainer binaries under `bin/` were rebuilt from this clean code commit.
+
+The first draft's complete ZIP was downloaded using bounded requests and matched
+its GitHub asset SHA-256 recorded above. Each of its three package sizes/hashes
+matched the signed catalog. The 16-check distribution report identifies the test
+public-key SHA-256 as
+`7900325fd8cc543d039391505f0ef75e7df790cee37270f3b420d1a5a81a4a4b`.
+The rebuilt client then cryptographically verified the downloaded catalog and
+registered/listed it in an isolated local inspection home using that test key.
+The local ZIP is `bin/phpm-debian13-signed-stage-b-684795542.zip` (15194184 bytes).
+Its test catalog expires at `2026-10-28T12:36:59Z`; source-registration/acquisition
+after that date must use a newly signed catalog. The local maintainer smoke-test
+seed was deleted after use; its public key and already signed bundle were retained.
+Final API inspection still confirmed private repository visibility.

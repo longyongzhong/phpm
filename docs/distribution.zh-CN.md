@@ -8,6 +8,8 @@ Ed25519 签名目录，并接入客户端安装、独立扩展、候选升级和
 首次实际验收已通过：[阶段 B 工作流](https://github.com/longyongzhong/phpm/actions/runs/40681164443)，
 包含签名安装、Composer 补扩展、空存储按锁恢复与候选回退。
 对应代码的[跨平台 CI](https://github.com/longyongzhong/phpm/actions/runs/40681126574)也已通过。
+加入分段传输后，[Debian 再验收](https://github.com/longyongzhong/phpm/actions/runs/40684837869)
+与[全部平台 CI](https://github.com/longyongzhong/phpm/actions/runs/40684786008)再次通过。
 
 ## Debian 运行库
 
