@@ -27,6 +27,11 @@ Usage: phpm [--home DIRECTORY] COMMAND
   php available                    Query the platform's checksummed PHP catalog
   php install 8.4 [--ts]            Download PHP (Windows x64 / Linux x64 static NTS)
   source add NAME --catalog FILE_OR_HTTPS_URL --key PUBLIC_KEY_FILE
+  source add NAME --catalog FILE_OR_HTTPS_URL --root ROOT_PUBLIC_KEY --fingerprint SHA256
+                                   Register an offline-root-authorized source
+  source verify NAME               Refresh authorization and verify source metadata
+  source replace-root NAME --root FILE --old-fingerprint SHA256 --new-fingerprint SHA256
+                                   Explicitly replace a locally trusted root
                                    Register an explicitly trusted signed source
   source list                      List source locations and pinned key fingerprints
   php available --source NAME       List a registered signed catalog

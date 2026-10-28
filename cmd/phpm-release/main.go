@@ -25,10 +25,16 @@ func main() {
 
 func run(args []string) error {
 	if len(args) == 0 {
-		return errors.New("usage: phpm-release keygen --private FILE --public FILE | catalog --key FILE --sequence N --output NEW_DIRECTORY BUILD_DIRECTORY...")
+		return errors.New("usage: phpm-release keygen | trust | catalog | clients | verify (use COMMAND --help for flags)")
 	}
 	set := flag.NewFlagSet(args[0], flag.ContinueOnError)
 	switch args[0] {
+	case "trust":
+		return trustCommand(args[1:])
+	case "clients":
+		return clientsCommand(args[1:])
+	case "verify":
+		return verifyCommand(args[1:])
 	case "keygen":
 		private := set.String("private", "", "new private seed file (base64, keep offline)")
 		public := set.String("public", "", "new public key file (base64)")
@@ -66,6 +72,8 @@ func run(args []string) error {
 		sequence := set.Uint64("sequence", 0, "monotonically increasing catalog sequence")
 		output := set.String("output", "", "new release bundle directory")
 		validity := set.Duration("validity", 30*24*time.Hour, "catalog lifetime, maximum 2160h")
+		trustDir := set.String("trust", "", "root-signed authorization directory (delegated mode)")
+		rootFile := set.String("root", "", "independently trusted root public key")
 		if err := set.Parse(args[1:]); err != nil {
 			return err
 		}
@@ -84,6 +92,20 @@ func run(args []string) error {
 		seed, err := base64.StdEncoding.DecodeString(strings.TrimSpace(string(data)))
 		if err != nil || len(seed) != ed25519.SeedSize {
 			return errors.New("invalid Ed25519 private seed file")
+		}
+		if (*trustDir == "") != (*rootFile == "") {
+			return errors.New("--trust and --root must be used together")
+		}
+		if *trustDir != "" {
+			root, err := readPublic(*rootFile)
+			if err != nil {
+				return err
+			}
+			if err := catalog.CreateDelegatedBundle(set.Args(), *output, seed, *sequence, time.Now(), *validity, *trustDir, root); err != nil {
+				return err
+			}
+			fmt.Println("Root-authorized signed bundle ready:", *output)
+			return nil
 		}
 		if err := catalog.CreateBundle(set.Args(), *output, seed, *sequence, time.Now(), *validity); err != nil {
 			return err

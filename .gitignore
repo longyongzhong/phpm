@@ -6,3 +6,5 @@
 /.phpm-transaction.json
 *.test
 /build/linux/**/__pycache__/
+/build/release/__pycache__/
+/scripts/__pycache__/

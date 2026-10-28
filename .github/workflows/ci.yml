@@ -42,6 +42,9 @@ jobs:
         run: go test -count=1 ./...
       - name: Vet
         run: go vet ./...
+      - name: Verify bootstrap archive rejection cases
+        if: runner.os == 'Linux'
+        run: python3 scripts/test_install_phpm.py
 
   linux-bootstrap:
     runs-on: ubuntu-latest

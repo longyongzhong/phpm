@@ -2,6 +2,7 @@
 """Run owned, disposable Debian QEMU + MySQL acceptance; never use an existing VM/database."""
 
 import argparse
+import base64
 import hashlib
 import http.server
 import json
@@ -157,14 +158,29 @@ def main():
         payload = work / "payload"
         payload.mkdir()
         go_env = dict(os.environ, CGO_ENABLED="0", GOAMD64="v1")
-        run(["go", "build", "-trimpath", "-o", payload / "phpm", "./cmd/phpm"], cwd=PROJECT, env=go_env)
+        run(["go", "build", "-trimpath", "-o", work / "phpm", "./cmd/phpm"], cwd=PROJECT, env=go_env)
         run(["go", "build", "-trimpath", "-o", work / "phpm-release", "./cmd/phpm-release"], cwd=PROJECT, env=go_env)
         run([work / "phpm-release", "keygen", "--private", work / "signing.seed", "--public", work / "signing.pub"])
-        bundle = work / "bundle"
+        run([work / "phpm-release", "keygen", "--private", work / "root.seed", "--public", work / "root.pub"])
+        run([work / "phpm-release", "trust", "--root-key", work / "root.seed", "--version", "1",
+             "--key", work / "signing.pub", "--output", work / "trust", "--validity", "72h"])
+        fingerprint = hashlib.sha256(base64.b64decode((work / "root.pub").read_bytes().strip())).hexdigest()
+        (work / "root.seed").unlink()
+        php_bundle = work / "php-bundle"
         run([work / "phpm-release", "catalog", "--key", work / "signing.seed", "--sequence", "1",
-             "--output", bundle, args.base.resolve(), args.target.resolve()])
+             "--trust", work / "trust", "--root", work / "root.pub", "--validity", "48h",
+             "--output", php_bundle, args.base.resolve(), args.target.resolve()])
+        bundle = work / "bundle"
+        client_version = "0.1.0-vm-test"
+        commit = output(["git", "rev-parse", "HEAD"], cwd=PROJECT)
+        run([work / "phpm-release", "clients", "--bundle", php_bundle, "--root", work / "root.pub",
+             "--key", work / "signing.seed", "--version", client_version, "--commit", commit,
+             "--linux", work / "phpm", "--notices", PROJECT, "--installer", PROJECT / "scripts/install-phpm.py",
+             "--output", bundle, "--validity", "48h"])
         (work / "signing.seed").unlink()
-        shutil.copyfile(bundle / "signing-key.pub", payload / "signing-key.pub")
+        run([work / "phpm-release", "verify", "--bundle", bundle, "--root", work / "root.pub", "--fingerprint", fingerprint])
+        shutil.copyfile(bundle / "root-key.pub", payload / "root-key.pub")
+        shutil.copyfile(PROJECT / "scripts/install-phpm.py", payload / "install-phpm.py")
         shutil.copyfile(ROOT / "guest.py", payload / "guest.py")
         download(recipe["composer"]["url"], payload / "composer.phar", "sha256", recipe["composer"]["sha256"])
         image = work / "base.qcow2"
@@ -220,6 +236,7 @@ def main():
             write_json(payload / "context.json", {"mysql": {"host": "10.0.2.2", "port": int(binding.split(":")[1]),
                 "database": "phpm_ci", "user": "phpm_ci", "password": db_password, "version": settings["mysql_version"]},
                 "catalog_url": f"https://10.0.2.2:{tls_port}/catalog.json", "base": settings["base_php"],
+                "root_sha256": fingerprint, "client_version": client_version, "client_commit": commit,
                 "target": settings["target_php"], "redis": settings["redis"], "soak_seconds": args.soak_seconds,
                 "host_boot_id": Path("/proc/sys/kernel/random/boot_id").read_text().strip()})
             (payload / "context.json").chmod(0o600)

@@ -25,12 +25,16 @@ import (
 
 // A source is an explicit user trust decision, never inferred from a download.
 type catalogSource struct {
-	Schema    int    `json:"schema"`
-	Name      string `json:"name"`
-	Location  string `json:"location"`
-	PublicKey string `json:"public_key"`
-	Sequence  uint64 `json:"sequence"`
-	Digest    string `json:"digest"`
+	Schema       int      `json:"schema"`
+	Name         string   `json:"name"`
+	Location     string   `json:"location"`
+	PublicKey    string   `json:"public_key"`
+	Sequence     uint64   `json:"sequence"`
+	Digest       string   `json:"digest"`
+	TrustMode    string   `json:"trust_mode,omitempty"`
+	TrustVersion uint64   `json:"trust_version,omitempty"`
+	TrustDigest  string   `json:"trust_digest,omitempty"`
+	Revoked      []string `json:"revoked,omitempty"`
 }
 
 var sourceName = regexp.MustCompile(`^[a-z][a-z0-9-]{0,39}$`)
@@ -128,18 +132,31 @@ func (s *Store) loadSource(name string) (catalogSource, error) {
 	if _, err := catalog.PublicKey([]byte(source.PublicKey)); err != nil {
 		return source, err
 	}
+	if source.TrustMode != "" && source.TrustMode != catalog.RootMode {
+		return source, errors.New("unsupported source trust mode")
+	}
+	if source.TrustMode == catalog.RootMode && (source.TrustVersion == 0 || !validSHA(source.TrustDigest)) {
+		return source, errors.New("invalid stored root authorization state")
+	}
+	if source.TrustMode == "" && (source.TrustVersion != 0 || source.TrustDigest != "" || len(source.Revoked) != 0) {
+		return source, errors.New("inconsistent direct-key source state")
+	}
 	return source, nil
 }
 
 // Keep the highest accepted sequence and its exact bytes. Expiry is checked on
 // every fetch; network/signature errors never fall back to a different provider.
 func verifiedCatalog(ctx context.Context, source catalogSource, client *http.Client) (catalog.Catalog, string, error) {
+	return verifiedSourceCatalog(ctx, source, client, nil)
+}
+
+func verifiedSourceCatalog(ctx context.Context, source catalogSource, client *http.Client, trust *catalog.Trust) (catalog.Catalog, string, error) {
 	var empty catalog.Catalog
 	data, err := readSourceResource(ctx, client, source.Location, catalog.MaxSize)
 	if err != nil {
 		return empty, "", err
 	}
-	sig, err := readSourceResource(ctx, client, source.Location+".sig", 1024)
+	sig, err := readSourceResource(ctx, client, source.Location+".sig", 4096)
 	if err != nil {
 		return empty, "", err
 	}
@@ -147,7 +164,15 @@ func verifiedCatalog(ctx context.Context, source catalogSource, client *http.Cli
 	if err != nil {
 		return empty, "", err
 	}
-	c, err := catalog.Verify(data, sig, key, time.Now())
+	var c catalog.Catalog
+	if source.TrustMode == catalog.RootMode {
+		if trust == nil {
+			return empty, "", errors.New("root authorization is required; direct-key fallback is forbidden")
+		}
+		c, err = catalog.VerifyDelegatedCatalog(data, sig, *trust, time.Now())
+	} else {
+		c, err = catalog.Verify(data, sig, key, time.Now())
+	}
 	if err != nil {
 		return c, "", err
 	}
@@ -173,7 +198,21 @@ func (s *Store) fetchSourceCatalog(ctx context.Context, name string, client *htt
 	if err != nil {
 		return source, c, err
 	}
-	c, digest, err := verifiedCatalog(ctx, source, client)
+	var trust *catalog.Trust
+	if source.TrustMode == catalog.RootMode {
+		updated, authorization, err := verifySourceTrust(ctx, source, client)
+		if err != nil {
+			return source, c, err
+		}
+		source = updated
+		trust = &authorization
+		// Remember revocations even if the accompanying catalog is stale,
+		// unavailable or still signed by the newly revoked publisher.
+		if err := writeJSON(s.sourcePath(name), source); err != nil {
+			return source, c, err
+		}
+	}
+	c, digest, err := verifiedSourceCatalog(ctx, source, client, trust)
 	if err != nil {
 		return source, c, err
 	}
@@ -182,6 +221,19 @@ func (s *Store) fetchSourceCatalog(ctx context.Context, name string, client *htt
 }
 
 func (c *CLI) sourceCommand(args []string) error {
+	if len(args) > 0 && args[0] == "replace-root" {
+		return c.replaceSourceRoot(args[1:])
+	}
+	if len(args) == 2 && args[0] == "verify" {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		source, index, err := c.Store.fetchSourceCatalog(ctx, args[1], catalogClient())
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(c.Out, "Verified source %s, catalog sequence %d, authorization version %d.\n", source.Name, index.Sequence, source.TrustVersion)
+		return nil
+	}
 	if len(args) == 1 && args[0] == "list" {
 		entries, err := os.ReadDir(filepath.Join(c.Store.Home, "sources"))
 		if err != nil {
@@ -196,27 +248,36 @@ func (c *CLI) sourceCommand(args []string) error {
 				return err
 			}
 			key, _ := catalog.PublicKey([]byte(source.PublicKey))
-			fmt.Fprintf(c.Out, "%s  %s  key-sha256:%s  sequence:%d\n", source.Name, source.Location, catalog.Fingerprint(key), source.Sequence)
+			mode := source.TrustMode
+			if mode == "" {
+				mode = "direct-key"
+			}
+			fmt.Fprintf(c.Out, "%s  %s  key-sha256:%s  sequence:%d  trust:%s/%d\n", source.Name, source.Location, catalog.Fingerprint(key), source.Sequence, mode, source.TrustVersion)
 		}
 		return nil
 	}
 	if len(args) == 0 || args[0] != "add" {
-		return errors.New("usage: phpm source add NAME --catalog FILE_OR_HTTPS_URL --key PUBLIC_KEY_FILE | source list")
+		return errors.New("usage: phpm source add NAME --catalog LOCATION (--key FILE | --root FILE --fingerprint SHA256) | source list | source verify NAME | source replace-root NAME ...")
 	}
 	set := flag.NewFlagSet("source add", flag.ContinueOnError)
 	location := set.String("catalog", "", "local catalog.json path or HTTPS URL")
 	keyFile := set.String("key", "", "independently trusted Ed25519 public key file")
+	rootFile := set.String("root", "", "offline root public key file")
+	fingerprint := set.String("fingerprint", "", "independently checked root SHA-256 fingerprint")
 	pos, err := parseFlags(set, args[1:])
 	if err != nil {
 		return err
 	}
-	if len(pos) != 1 || !sourceName.MatchString(pos[0]) || *keyFile == "" {
-		return errors.New("source add requires NAME, --catalog and --key")
+	if len(pos) != 1 || !sourceName.MatchString(pos[0]) || (*keyFile == "") == (*rootFile == "") {
+		return errors.New("source add requires NAME, --catalog and exactly one of --key or --root")
 	}
 	name := pos[0]
 	locationValue, err := normalizeCatalogLocation(*location)
 	if err != nil {
 		return err
+	}
+	if *rootFile != "" {
+		*keyFile = *rootFile
 	}
 	if strings.Contains(*keyFile, "://") {
 		return errors.New("--key requires a local independently trusted public key file")
@@ -229,6 +290,12 @@ func (c *CLI) sourceCommand(args []string) error {
 	if err != nil {
 		return err
 	}
+	if *rootFile != "" && (!validSHA(*fingerprint) || catalog.Fingerprint(key) != *fingerprint) {
+		return errors.New("--root requires the independently checked --fingerprint SHA-256")
+	}
+	if *rootFile == "" && *fingerprint != "" {
+		return errors.New("--fingerprint is used with --root")
+	}
 	unlock, err := c.Store.lock("source:" + name)
 	if err != nil {
 		return err
@@ -240,7 +307,18 @@ func (c *CLI) sourceCommand(args []string) error {
 	source := catalogSource{Schema: 1, Name: name, Location: locationValue, PublicKey: base64.StdEncoding.EncodeToString(key)}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	index, digest, err := verifiedCatalog(ctx, source, catalogClient())
+	var trust *catalog.Trust
+	client := catalogClient()
+	if *rootFile != "" {
+		source.TrustMode = catalog.RootMode
+		updated, authorization, err := verifySourceTrust(ctx, source, client)
+		if err != nil {
+			return err
+		}
+		source = updated
+		trust = &authorization
+	}
+	index, digest, err := verifiedSourceCatalog(ctx, source, client, trust)
 	if err != nil {
 		return err
 	}

@@ -1,0 +1,90 @@
+name: Offline-root client release rehearsal (stage D)
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_run:
+        description: Successful stage-A PHP 8.4 run ID
+        type: string
+        required: true
+      target_run:
+        description: Successful stage-A PHP 8.5 run ID
+        type: string
+        required: true
+      draft_release:
+        description: Upload individual public assets to a private draft using TEST keys
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Fetch accepted same-repository source builds
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE_RUN: ${{ inputs.base_run }}
+          TARGET_RUN: ${{ inputs.target_run }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for role in base target; do
+            if [ "$role" = base ]; then run_id="$BASE_RUN"; else run_id="$TARGET_RUN"; fi
+            [[ "$run_id" =~ ^[1-9][0-9]*$ ]] || exit 1
+            gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id" > "$RUNNER_TEMP/$role-run.json"
+            attempt=$(python3 - "$RUNNER_TEMP/$role-run.json" <<'PY'
+          import json, os, sys
+          r = json.load(open(sys.argv[1]))
+          if r['conclusion'] != 'success' or r['path'] != '.github/workflows/debian-source-build.yml' or r['repository']['full_name'] != os.environ['GITHUB_REPOSITORY']:
+              raise SystemExit('Expected a successful same-repository source build')
+          print(r['run_attempt'])
+          PY
+            )
+            gh run download "$run_id" --repo "$GITHUB_REPOSITORY" --name "phpm-debian13-source-build-$run_id-$attempt" --dir "$RUNNER_TEMP/$role-packages"
+          done
+      - name: Check crypto interoperability and hostile archive handling
+        run: |
+          go test -count=1 ./internal/catalog ./internal/phpm
+          python3 scripts/test_install_phpm.py
+      - name: Build and verify disposable-key client and PHP distribution
+        run: python3 build/release/preview.py --base "$RUNNER_TEMP/base-packages" --target "$RUNNER_TEMP/target-packages" --output "$RUNNER_TEMP/release"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: phpm-client-release-preview-${{ github.run_id }}
+          path: ${{ runner.temp }}/release/
+          if-no-files-found: error
+          retention-days: 14
+
+  draft:
+    if: ${{ inputs.draft_release }}
+    needs: prepare
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Verify downloaded bundle and upload private draft assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --name "phpm-client-release-preview-$GITHUB_RUN_ID" --dir "$RUNNER_TEMP/release"
+          go build -trimpath -o "$RUNNER_TEMP/phpm-release" ./cmd/phpm-release
+          fingerprint=$(python3 -c 'import base64,hashlib,os; from pathlib import Path; print(hashlib.sha256(base64.b64decode((Path(os.environ["RUNNER_TEMP"])/"release/root-key.pub").read_bytes().strip())).hexdigest())')
+          python3 build/release/publish.py --repo "$GITHUB_REPOSITORY" --tag "stage-d-test-$GITHUB_RUN_ID" --bundle "$RUNNER_TEMP/release" --root "$RUNNER_TEMP/release/root-key.pub" --fingerprint "$fingerprint" --verifier "$RUNNER_TEMP/phpm-release" --test-preview

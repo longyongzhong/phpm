@@ -107,7 +107,14 @@ def main():
         env = dict(os.environ, PHPM_HOME=str(root / "home"), PHPM_COMPOSER=str(ROOT / "composer.phar"),
                    COMPOSER_HOME=str(root / "composer-home"), SSL_CERT_FILE=str(ROOT / "fixture-ca.pem"),
                    SSL_CERT_DIR=str(empty), PHPRC=str(empty), PHP_INI_SCAN_DIR=str(empty))
-        cli = ROOT / "phpm"
+        installed = json.loads(subprocess.check_output(["python3", str(ROOT / "install-phpm.py"),
+            "--source", context["catalog_url"].removesuffix("catalog.json"), "--root", str(ROOT / "root-key.pub"),
+            "--fingerprint", context["root_sha256"], "--dest", str(root / "client"), "--version", context["client_version"],
+            "--ca", str(ROOT / "fixture-ca.pem")], text=True, timeout=180))
+        if installed["commit"] != context["client_commit"] or installed["authorization_version"] != 1:
+            raise ValueError("installed client identity/authorization mismatch")
+        cli = root / "client/phpm"
+        checks += ["root-authorized-signed-client-bootstrap-without-go-or-php"]
 
         def command(*args, fail=None):
             print("+ phpm", " ".join(map(str, args)), flush=True)
@@ -126,7 +133,9 @@ def main():
             value = json.loads(command("info", *(["--candidate"] if candidate else [])))
             return value["environment"] if candidate else value
 
-        command("source", "add", "vm", "--catalog", context["catalog_url"], "--key", ROOT / "signing-key.pub")
+        command("source", "add", "vm", "--catalog", context["catalog_url"], "--root", ROOT / "root-key.pub", "--fingerprint", context["root_sha256"])
+        command("source", "verify", "vm")
+        checks += ["root-authorized-php-catalog"]
         command("php", "install", context["base"], "--source", "vm")
         command("init", "--php", "8.4")
         (project / "phpm.yaml").write_text(json.dumps({"schema": 1, "php": "8.4", "ini": {
@@ -274,6 +283,7 @@ def main():
         samples.append(fpm_probe(target_fpm, context["target"]))
         checks += ["real-php85-to-php84-rollback", "byte-exact-project-pair-restored", "mysql-and-redis-data-preserved-after-rollback"]
         report = {"schema": 1, "checks": checks, "versions": [selected["runtime"]["php"]["version"] for selected in (initial, active, restored)],
+            "client_installation": installed,
             "guest_kernel": platform.release(), "guest_boot_id": guest_boot, "virtualization": virt,
             "glibc": subprocess.check_output(["getconf", "GNU_LIBC_VERSION"], text=True).strip(),
             "php_api": [initial["runtime"]["php"]["api"], candidate["runtime"]["php"]["api"]],
