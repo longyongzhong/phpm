@@ -16,11 +16,12 @@ This is an initial **0.1.0-dev** implementation, not a production deployment too
 | Official PHP download + SHA-256 verification | Implemented | Not implemented |
 | StaticPHP community static PHP download + published SHA-256 | Not used | Linux x64 NTS common preset; other architectures/macOS use imports |
 | Import and probe local dynamic extensions | DLL | SO; requires compatible host libraries |
-| `ext install`: online extension installation | Official PECL Windows x64 archives | Runtime-bundled modules only; online source builds pending |
+| `ext install`: online extension installation | Official PECL Windows x64 archives | Bundled modules; signed-catalog Redis for Debian 13 x64 |
 | Project YAML, platform lock, immutable environment | Implemented | Implemented |
 | Execute with independent PHP configuration | Implemented | Implemented; Unix launcher uses process replacement |
 | Run Composer with project PHP; inspect declared platform requirements | Implemented; requires compatible Composer 2 PHAR for checks | Implemented; same requirement |
-| Automated PHP/extension source builds or PIE integration | Not implemented | Experimental Debian 13 x64 Actions recipe; client backend/PIE not implemented |
+| Automated PHP/extension source builds or PIE integration | Not implemented | Debian 13 x64 build workflow and opt-in signed catalog; PIE not implemented |
+| Signed catalog install and exact locked artifact restoration | Not used | Opt-in Debian 13 x64 NTS provider; explicit public-key trust |
 | Prepare/test/activate/rollback project PHP upgrades | Implemented | Linux x64 StaticPHP downloads or preimported runtimes; compatible cached/bundled extensions |
 | FPM, service restart, production deployment, garbage collection | Not implemented | Not implemented |
 
@@ -34,6 +35,13 @@ artifacts. It does not change the CLI's Linux download source or publish Release
 The [first successful source build](https://github.com/longyongzhong/phpm/actions/runs/40666487813)
 passed SDK relocation/rebuilding and fresh-container runtime/FPM checks on Debian
 13 x64. See the [source-build guide](build/linux/README.zh-CN.md) for its scope.
+
+The opt-in signed provider adds `source add/list`, `php install --source NAME`,
+matching Redis acquisition, source-preserving upgrade candidates and
+`install --frozen --source NAME` for exact artifact restoration. See the
+[distribution guide](docs/distribution.zh-CN.md) for key trust, offline signing,
+the private draft workflow and current production limitations. Default Linux
+downloads still use StaticPHP; no production signing key is bundled.
 
 ## Build
 

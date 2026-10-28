@@ -10,14 +10,18 @@ import (
 func (c *CLI) preparePHPUpgrade(args []string) error {
 	set := flag.NewFlagSet("php upgrade", flag.ContinueOnError)
 	runtimeID := set.String("runtime", "", "use a locally imported target build")
+	source := set.String("source", "", "use a registered signed catalog")
 	pos, err := parseFlags(set, args)
 	if err != nil {
 		return err
 	}
 	if len(pos) > 1 {
-		return errors.New("usage: phpm php upgrade [VERSION] [--runtime ID]")
+		return errors.New("usage: phpm php upgrade [VERSION] [--runtime ID | --source NAME]")
 	}
-	request := runtimeUpgradeRequest{RuntimeID: *runtimeID}
+	if *source != "" && *runtimeID != "" {
+		return errors.New("--source and --runtime cannot be combined")
+	}
+	request := runtimeUpgradeRequest{RuntimeID: *runtimeID, Source: *source}
 	if len(pos) == 1 {
 		request.Version = pos[0]
 	}

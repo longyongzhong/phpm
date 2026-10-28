@@ -18,6 +18,9 @@ Scope: the 0.1.0-dev CLI implementation, not a promise of complete platform supp
 - `runtime_download.go` / `linux_download.go`: OS dispatch and the StaticPHP Linux x64 NTS common provider; published-checksum catalog, restricted redirects and static ELF validation.
 - `archive_tar.go`: bounded gzip/TAR extraction with trailer verification and no links/special files or overwrites.
 - `linux_transfer.go`: bounded HTTP range chunks, interrupted-transfer continuation, final publisher SHA-256 and verified cache commit.
+- `catalog_source.go` / `internal/catalog`: explicitly pinned Ed25519 sources,
+  catalog expiry/sequence checks, Debian host gating, signed runtime/extension
+  acquisition and exact-lock hydration. No automatic trust-root bootstrapping.
 - `cli.go`: CLI dispatch and user-visible scope.
 - `platform_*.go`: file replacement and process execution behavior.
 
@@ -154,6 +157,37 @@ existing providers and local imports. Exported stage-A archives are unsigned;
 the first hosted build passed SDK rebuilding and fresh-container runtime/FPM
 checks (see `validation.md`). Independent-VM validation, cross-version upgrades,
 trusted distribution and production service management remain separate work.
+
+### Opt-in signed distribution
+
+Stage B is a separate client/provider path, selected by a registered source name.
+Registration pins a local public key and local catalog path or HTTPS URL. Catalogs
+bind target, PHP API, build revision, extension loader, package sizes and hashes;
+signatures cover their exact JSON bytes. Accepted sequence/hash state is persisted
+under a source lock. Expired catalogs, rollbacks, changed same-sequence bytes and
+invalid signatures fail without switching to another provider. This is a single
+key/expiry/sequence protocol, not full TUF or an automatic key-rotation system.
+
+Only Debian 13 amd64 with glibc 2.41 is accepted before downloaded PHP executes.
+Package SHA-256 and size checks precede bounded extraction; binary hash, PHP ABI
+and real relocated execution precede store import. A signed-catalog install may
+update the provenance of an already identical local runtime; payload identity,
+existing environment identity and project files do not change. Upgrade preparation
+inherits the signed source; external modules bind to the exact runtime build.
+
+`install --frozen --source NAME` looks up the locked build and hashes, restores its
+runtime and bundled/catalog modules and compares their final IDs/digests with the
+lock. It never chooses a newer build, rebuilds source or rewrites the project pair.
+Normal frozen installation revalidates after hydration. Failed restoration may
+leave verified cache/store entries. Existing manual-only local artifacts still
+need explicit imports. Missing dependencies remain documented host requirements.
+
+`cmd/phpm-release` signs offline only after checking native gate reports and package
+hashes. The stage-B Actions verifier reuses a successful stage-A run and generates
+an ephemeral test key inside the test process; its private key is never exported.
+An optional separate write-permission job creates only a draft prerelease ZIP.
+Production signing keys, independent-VM acceptance and production service control
+remain outside this workflow. See `distribution.zh-CN.md` for exact commands.
 
 ## Sources used for the initial adapters
 

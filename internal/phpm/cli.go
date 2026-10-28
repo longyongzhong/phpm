@@ -26,9 +26,15 @@ Usage: phpm [--home DIRECTORY] COMMAND
   php list                         List imported PHP builds
   php available                    Query the platform's checksummed PHP catalog
   php install 8.4 [--ts]            Download PHP (Windows x64 / Linux x64 static NTS)
+  source add NAME --catalog FILE_OR_HTTPS_URL --key PUBLIC_KEY_FILE
+                                   Register an explicitly trusted signed source
+  source list                      List source locations and pinned key fingerprints
+  php available --source NAME       List a registered signed catalog
+  php install VERSION --source NAME
+                                   Install signed Debian 13 x64 packages
   php import DIRECTORY [--binary bin/php]
                                    Copy a self-contained local PHP distribution
-  php upgrade [VERSION] [--runtime ID]
+  php upgrade [VERSION] [--runtime ID | --source NAME]
                                    Prepare a verified candidate; keep current PHP
   ext list                         List imported extension builds
   ext check [--no-dev] [--candidate] [--json] [--lock]
@@ -41,6 +47,7 @@ Usage: phpm [--home DIRECTORY] COMMAND
              [--sha256 HASH] [--zend]
                                    Import and probe a local DLL/SO
   install [--frozen | --update]      Verify artifacts and commit a locked environment
+  install --frozen --source NAME    Restore exact locked catalog artifacts
   info                             Print the verified current environment as JSON
   verify                           Verify locked files and actual PHP loading
   doctor                           Diagnose the current project (same checks as verify)
@@ -59,6 +66,7 @@ populates the store. Online downloads currently support official Windows x64 PEC
 archives; runtime-bundled modules can also be enabled. No system PHP is changed.
 Activation/rollback affect future launches only; service restarts stay manual.
 Linux downloads use the community StaticPHP common preset with built-in modules.
+Explicit --source uses a registered signed catalog; Debian 13 x64 NTS only.
 Linux/macOS automatic compilation, PIE integration, FPM and deployment are not
 implemented in this development release. See README.md for the support matrix.
 `
@@ -145,6 +153,8 @@ func (c *CLI) run(args []string) (int, error) {
 		return 0, nil
 	case "init":
 		return 0, c.init(args[1:])
+	case "source":
+		return 0, c.sourceCommand(args[1:])
 	case "php":
 		return 0, c.php(args[1:])
 	case "ext":
@@ -158,6 +168,7 @@ func (c *CLI) run(args []string) (int, error) {
 		set := flag.NewFlagSet("install", flag.ContinueOnError)
 		frozen := set.Bool("frozen", false, "require an unchanged lock")
 		update := set.Bool("update", false, "resolve installed builds again")
+		source := set.String("source", "", "restore exact locked artifacts from a signed catalog (requires --frozen)")
 		pos, err := parseFlags(set, args[1:])
 		if err != nil {
 			return 0, err
@@ -168,6 +179,14 @@ func (c *CLI) run(args []string) (int, error) {
 		root, err := findProject(".")
 		if err != nil {
 			return 0, err
+		}
+		if *source != "" {
+			if !*frozen || *update {
+				return 0, errors.New("install --source requires --frozen and cannot use --update")
+			}
+			if err := c.Store.restoreCatalogLock(root, *source); err != nil {
+				return 0, err
+			}
 		}
 		env, err := c.Store.install(root, *frozen, *update)
 		if err != nil {
@@ -278,11 +297,28 @@ func (c *CLI) php(args []string) error {
 		}
 		return nil
 	case "available":
-		if len(args) != 1 {
-			return errors.New("php available does not accept arguments")
+		set := flag.NewFlagSet("php available", flag.ContinueOnError)
+		source := set.String("source", "", "registered signed catalog")
+		pos, err := parseFlags(set, args[1:])
+		if err != nil {
+			return err
+		}
+		if len(pos) != 0 {
+			return errors.New("php available does not accept positional arguments")
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
+		if *source != "" {
+			_, index, err := c.Store.fetchSourceCatalog(ctx, *source, catalogClient())
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(c.Out, "Signed catalog %s sequence %d (target compatibility checked at install):\n", *source, index.Sequence)
+			for _, build := range index.Builds {
+				fmt.Fprintf(c.Out, "%s  revision %d  %s  %s\n", build.Version, build.Revision, build.Target, build.ID)
+			}
+			return nil
+		}
 		if runtime.GOOS == "linux" {
 			if runtime.GOARCH != "amd64" {
 				return errors.New("automatic Linux PHP downloads currently support x86_64")
@@ -314,12 +350,23 @@ func (c *CLI) php(args []string) error {
 	case "install":
 		set := flag.NewFlagSet("php install", flag.ContinueOnError)
 		ts := set.Bool("ts", false, "thread-safe build")
+		source := set.String("source", "", "registered signed catalog")
 		pos, err := parseFlags(set, args[1:])
 		if err != nil {
 			return err
 		}
 		if len(pos) != 1 {
-			return errors.New("usage: phpm php install VERSION [--ts]")
+			return errors.New("usage: phpm php install VERSION [--ts] [--source NAME]")
+		}
+		if *source != "" {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+			defer cancel()
+			rt, err := c.Store.installCatalogRuntime(ctx, *source, pos[0], *ts, c.Out)
+			if err != nil {
+				return err
+			}
+			fmt.Fprintln(c.Out, "Installed:", formatRuntime(rt))
+			return nil
 		}
 		if runtime.GOOS == "linux" {
 			fmt.Fprintln(c.Out, "Fetching StaticPHP community static Linux x64 NTS build and published SHA-256; common extensions are built in...")

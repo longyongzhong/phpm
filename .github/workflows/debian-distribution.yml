@@ -1,0 +1,84 @@
+name: Debian signed distribution (stage B)
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_run:
+        description: Successful stage-A build run ID in this repository
+        required: true
+        type: string
+      draft_release:
+        description: Save the verified test-key bundle as a draft prerelease (never publish)
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  verify-distribution:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Fetch successful stage-A artifacts from this repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN: ${{ inputs.source_run }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_RUN" =~ ^[1-9][0-9]*$ ]] || { echo 'Invalid source run ID'; exit 1; }
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN" > "$RUNNER_TEMP/source-run.json"
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          r = json.loads((Path(os.environ['RUNNER_TEMP']) / 'source-run.json').read_text())
+          if r['conclusion'] != 'success' or r['path'] != '.github/workflows/debian-source-build.yml' or r['repository']['full_name'] != os.environ['GITHUB_REPOSITORY']:
+              raise SystemExit('Expected a successful stage-A build in this repository')
+          PY
+          attempt=$(python3 -c 'import json,os; print(json.load(open(os.environ["RUNNER_TEMP"]+"/source-run.json"))["run_attempt"])')
+          gh run download "$SOURCE_RUN" --repo "$GITHUB_REPOSITORY" --name "phpm-debian13-source-build-$SOURCE_RUN-$attempt" --dir "$RUNNER_TEMP/source-packages"
+      - name: Validate signed catalog and fresh-container client lifecycle
+        run: python3 build/linux/distribution.py --packages "$RUNNER_TEMP/source-packages" --output "$RUNNER_TEMP/distribution"
+      - name: Retain signed test bundle and report
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: phpm-debian13-signed-test-${{ github.run_id }}
+          path: ${{ runner.temp }}/distribution/
+          if-no-files-found: error
+          retention-days: 14
+      - name: Create a ZIP containing only the accepted bundle and report
+        if: ${{ inputs.draft_release }}
+        run: python3 -c 'import os,shutil; t=os.environ["RUNNER_TEMP"]; shutil.make_archive(t+"/phpm-debian13-signed-test", "zip", t+"/distribution")'
+      - name: Retain draft release ZIP
+        if: ${{ inputs.draft_release }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: phpm-debian13-draft-zip-${{ github.run_id }}
+          path: ${{ runner.temp }}/phpm-debian13-signed-test.zip
+          if-no-files-found: error
+          retention-days: 14
+
+  draft-release:
+    if: ${{ inputs.draft_release }}
+    needs: verify-distribution
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - name: Download verified ZIP and create a draft only
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --name "phpm-debian13-draft-zip-$GITHUB_RUN_ID" --dir "$RUNNER_TEMP/accepted"
+          printf '%s\n' 'Stage-B verification bundle signed with an ephemeral TEST key.' 'This is a draft prerelease, not a production trust root or supported production runtime.' 'Source-build reports and client verification report are included. No private signing key is included.' > "$RUNNER_TEMP/release-notes.txt"
+          gh release create "stage-b-test-$GITHUB_RUN_ID" "$RUNNER_TEMP/accepted/phpm-debian13-signed-test.zip" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "Debian signed distribution verification $GITHUB_RUN_ID" --draft --prerelease --notes-file "$RUNNER_TEMP/release-notes.txt"

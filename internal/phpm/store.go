@@ -34,9 +34,11 @@ type PHPInfo struct {
 }
 
 type Source struct {
-	Kind   string `json:"kind"`
-	URL    string `json:"url,omitempty"`
-	SHA256 string `json:"sha256,omitempty"`
+	Kind    string `json:"kind"`
+	URL     string `json:"url,omitempty"`
+	SHA256  string `json:"sha256,omitempty"`
+	Catalog string `json:"catalog,omitempty"`
+	Build   string `json:"build,omitempty"`
 }
 
 type Runtime struct {
@@ -80,7 +82,7 @@ func openStore(home string) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	for _, dir := range []string{"store/runtimes", "store/extensions", "environments", "tmp", "locks", "cache", "projects"} {
+	for _, dir := range []string{"store/runtimes", "store/extensions", "environments", "tmp", "locks", "cache", "projects", "sources"} {
 		if err := os.MkdirAll(filepath.Join(abs, dir), 0700); err != nil {
 			return nil, err
 		}
@@ -330,7 +332,18 @@ func (s *Store) importRuntime(dir, binary string, source Source) (Runtime, error
 		if existing.Digest != result.Digest || existing.Binary != result.Binary || digestJSON(existing.PHP) != digestJSON(result.PHP) {
 			return result, errors.New("runtime ID collision or changed build metadata; existing artifact was not overwritten")
 		}
-		return existing, s.verifyRuntime(existing)
+		if err := s.verifyRuntime(existing); err != nil {
+			return existing, err
+		}
+		// Provenance is not payload identity. An explicit verified catalog install
+		// can adopt an identical local import without changing its files or ID.
+		if source.Kind == "signed-catalog" && existing.Source != source {
+			existing.Source = source
+			if err := writeJSON(filepath.Join(s.runtimePath(id), "manifest.json"), existing); err != nil {
+				return Runtime{}, err
+			}
+		}
+		return existing, nil
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return result, err
 	}

@@ -2,8 +2,9 @@
 
 Linux 官方源码构建已在 GitHub Actions 完成首次验证，面向 Debian 13 x64，
 通过 SDK 迁移重编译、运行时、扩展和 FPM 检查。
-操作和范围见 [构建说明](build/linux/README.zh-CN.md)。产物仍是阶段 A 未签名包，
-尚未接入客户端默认下载源，当前不承诺生产可用。
+操作和范围见 [构建说明](build/linux/README.zh-CN.md)。阶段 B 另提供显式可信源安装、
+签名目录和锁文件精确恢复，见 [分发与安装](docs/distribution.zh-CN.md)。
+默认下载源保持不变；正式签名密钥与生产部署尚未启用。
 
 [English](README.md)
 
@@ -15,6 +16,8 @@ PHPM 为每个项目生成独立的 PHP CLI 环境，跨项目共享 PHP 构建�
 - Go CLI，不依赖预装 PHP 即可启动。
 - Windows x64 官方 PHP 下载、TS/NTS 选择、官方 SHA-256 校验及下载缓存。
 - Linux x64 从 StaticPHP 社区获取静态 NTS PHP，校验发布摘要和 ELF，无需预装 PHP/Go 或系统级包安装。
+- Debian 13 x64 可显式注册 Ed25519 公钥和签名目录，通过 `php install --source 名称`
+  安装构建包；支持匹配的 Redis、候选升级及 `install --frozen --source 名称` 精确恢复。
 - 将本地 PHP 分发目录复制到独立存储，记录版本、PHP API、构建信息和文件摘要。
 - 导入本地 DLL/SO，区分普通扩展和 Zend 扩展，启动 PHP 验证名称与精确版本。
 - `ext install` 从官方 Windows 扩展目录在线安装，自动匹配 PHP/TS/NTS/工具链/x64，并更新项目配置和锁文件。

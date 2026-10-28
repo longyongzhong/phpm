@@ -80,6 +80,9 @@ func (p windowsExtensionProvider) acquire(ctx context.Context, rt Runtime, reque
 		return acquiredExtension{Version: version, Artifact: &ext}, err
 	}
 	if rt.Platform != "windows-amd64" {
+		if rt.Source.Kind == "signed-catalog" {
+			return p.acquireCatalogExtension(ctx, rt, request)
+		}
 		return acquiredExtension{}, errors.New("online extension downloads currently support Windows x64; Linux/macOS support bundled modules and ext import, with source-build support still pending")
 	}
 	version, raw, err := p.resolveArchive(ctx, rt, request)

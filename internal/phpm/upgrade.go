@@ -30,7 +30,7 @@ type UpgradePlan struct {
 	Environment  LockedEnvironment `json:"environment"`
 }
 
-type runtimeUpgradeRequest struct{ Version, RuntimeID string }
+type runtimeUpgradeRequest struct{ Version, RuntimeID, Source string }
 type runtimeAcquire func(context.Context, Runtime, runtimeUpgradeRequest) (Runtime, error)
 
 func projectIdentity(root string) string {
@@ -68,6 +68,13 @@ func (s *Store) acquireUpgradeRuntime(ctx context.Context, current Runtime, requ
 	if version == "" {
 		parts := strings.Split(current.PHP.Version, ".")
 		version = strings.Join(parts[:2], ".")
+	}
+	source := request.Source
+	if source == "" && current.Source.Kind == "signed-catalog" {
+		source = current.Source.Catalog
+	}
+	if source != "" {
+		return s.installCatalogRuntime(ctx, source, version, current.PHP.ZTS, nil)
 	}
 	return s.installRuntime(version, current.PHP.ZTS, nil)
 }
