@@ -553,3 +553,40 @@ project's INI or application execution flags. Native missing-module checks cover
 both ordinary/Zend loaders, with opposite project `display_errors` settings.
 The Windows native PHP/Composer/two-Redis regression and vet passed after this fix
 (25.245 seconds for the PHPM tests). A new VM run is required for final acceptance.
+
+[VM run 40697707730](https://github.com/longyongzhong/phpm/actions/runs/40697707730)
+passed on `2b01d471953db8f3b0d4e364e0989134d6adaace`, as did
+[all cross-platform CI jobs](https://github.com/longyongzhong/phpm/actions/runs/40697638030).
+The downloaded report artifact `12820682063` matched its GitHub SHA-256
+`f23ed2c6ed5bdca309f805b02c5d11a3be763cf1659be9cbcabac7a99f443f52`.
+It contained only the two JSON reports and three diagnostic logs, with no private
+keys. The report records 21 completed checks and these observed results:
+
+| Evidence | Observed value |
+|---|---|
+| Host kernel | `7.0.0-1017-azure` |
+| Independent guest kernel | `6.12.113+deb13-cloud-amd64` |
+| Guest virtualization / libc | QEMU / glibc 2.41 |
+| Actual version lifecycle | `8.4.27 -> 8.5.12 -> 8.4.27` |
+| PHP extension API | `20240924 -> 20250925` |
+| Actual database server | MySQL `8.4.13` |
+| Redis extension | `6.3.0`, independently acquired for both PHP builds |
+| Bounded active-version soak | 41 CLI/FPM rounds in 122.36 seconds (120 requested) |
+
+Both real versions executed prepared MySQL queries, utf8mb4 data and transaction
+rollback checks, Redis read/write and FPM requests with the project INI. The old SO
+was rejected with its actual API diagnostic, while the valid candidate remained
+verifiable. OPcache moved from a shared module to the 8.5 built-in. Activation left
+the old CLI/FPM processes on 8.4; rollback restored the exact original environment
+ID and YAML/lock bytes while retaining MySQL/Redis data. The guest independently
+checked its boot identity differed from the host, had no system PHP/compiler,
+ran non-root and had no default internet route during acceptance. Cleanup completed
+successfully as part of the green job.
+
+Reports are retained locally under `.cache/vm-report-12820682063/`. Windows and
+Linux CLI binaries in `bin/` were rebuilt with the diagnostic fix. This closes
+the built-in independent-VM/real-version/MySQL acceptance milestone, not business
+application acceptance, sustained high-concurrency qualification, production
+service/traffic switching or formal signing-key operations. Those remain deferred.
+The workflow requires explicit successful base/target run IDs rather than keeping
+a default reference to an artifact that will expire after its retention period.

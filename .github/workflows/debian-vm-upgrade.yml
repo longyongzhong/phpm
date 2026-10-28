@@ -7,7 +7,6 @@ on:
         description: Successful stage-A PHP 8.4 run ID
         required: true
         type: string
-        default: '40666487813'
       target_run:
         description: Successful stage-A PHP 8.5 run ID
         required: true

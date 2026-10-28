@@ -43,6 +43,12 @@ matching Redis acquisition, source-preserving upgrade candidates and
 the private draft workflow and current production limitations. Default Linux
 downloads still use StaticPHP; no production signing key is bundled.
 
+The [stage-C VM acceptance](build/linux/vm/README.zh-CN.md) passed a real
+8.4.27 -> 8.5.12 -> 8.4.27 lifecycle in an independent Debian kernel, including
+MySQL/Redis, both FPM versions, preserved old processes and exact project-file
+rollback. It is a built-in fixture with a bounded soak, not business acceptance
+or production service deployment.
+
 ## Build
 
 Requires Go 1.23 or newer. The only application dependency is

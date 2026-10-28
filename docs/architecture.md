@@ -128,11 +128,11 @@ Source preparation time is not treated as proof of application deployment or hea
    collection and build-only operations before permitting any shared-runtime writes.
 2. Design extension dependencies, loading order, build options and explicit selection
    of multiple builds of the same extension version.
-3. Add Linux source builds against declared distro/libc baselines with matching
-   phpize/php-config/headers, then validate on Linux hosts.
+3. Extend the verified Debian 13 PHP 8.4/8.5 source profiles and matching SDKs
+   to additional declared distro/libc baselines.
 4. Validate native macOS ARM64/Intel packages and external library behavior.
-5. Add trusted artifact distribution so locked environments can be hydrated on
-   another machine; distinguish exact artifact restoration from source rebuilds.
+5. Extend the opt-in signed catalog/exact-lock hydration with production trust-root
+   rotation/revocation and formal publishing operations.
 6. Add FPM as separate masters per extension environment, with independent sockets,
    PID files and configuration. Pools alone are not extension-version isolation.
 7. Add service-manager integration, environment pinning, retained releases and
@@ -155,8 +155,9 @@ Redis/TLS and a real FPM request before packages can be exported.
 This pipeline is not a published runtime backend. The client still uses its
 existing providers and local imports. Exported stage-A archives are unsigned;
 the first hosted build passed SDK rebuilding and fresh-container runtime/FPM
-checks (see `validation.md`). Independent-VM validation, cross-version upgrades,
-production trust-root distribution and service management remain separate work.
+checks (see `validation.md`). Independent-VM and real-version upgrade acceptance
+is covered by stage C below; production trust-root distribution and service
+management remain separate work.
 
 ### Opt-in signed distribution
 
@@ -192,6 +193,25 @@ an ephemeral test key inside the test process; its private key is never exported
 An optional separate write-permission job creates only a draft prerelease ZIP.
 Production signing keys, independent-VM acceptance and production service control
 remain outside this workflow. See `distribution.zh-CN.md` for exact commands.
+
+### Independent VM acceptance
+
+`debian-vm-upgrade.yml` and `build/linux/vm` add a manual, read-only acceptance
+workflow using two successful source runs. It starts an owned Debian QEMU guest
+with its own kernel/boot identity and an owned digest-pinned MySQL instance. Guest
+dependencies use the Debian snapshot, then default internet routing is removed.
+SSH host keys are pre-pinned; signed packages travel over CA-verified fixture TLS.
+Only reports/logs leave the fixture, and its temporary keys/disks/database are
+removed. No existing VM, service or user business project is selected implicitly.
+
+The built-in real PHP 8.4 -> 8.5 -> rollback test passed MySQL/Redis, wrong-API SO
+refusal, shared-to-built-in OPcache, two separate FPM masters, preserved old
+processes and byte-exact project restoration. Extension-only probes now route
+startup errors to stderr so ABI failures retain their cause; project/application
+INI settings keep their chosen values. See `validation.md` for exact versions,
+source IDs, kernels and bounded soak results. Business workloads, long-duration
+load qualification, production traffic/service management and signing-key
+operations remain separate work.
 
 ## Sources used for the initial adapters
 

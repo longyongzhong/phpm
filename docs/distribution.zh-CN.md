@@ -140,9 +140,10 @@ bundle 的各文件作为独立资产上传，使 `catalog.json` 与列出的包
 
 ## 仍需完成的生产验证
 
-本阶段不代替独立 Debian VM、真实 MySQL、长时间业务压测、真实跨 PHP 版本的扩展
-迁移、安全更新重建与正式密钥管理。FPM 服务托管、生产流量切换和自动健康回退仍为
-后续范围。单次签名安装成功不代表已经完成生产部署。
+后续的 [阶段 C](../build/linux/vm/README.zh-CN.md) 已完成内置独立 Debian VM、真实
+MySQL 与跨 PHP 版本扩展迁移验收，包括两个 FPM 版本和精确回退。业务项目实测、
+长时间高并发业务压测、安全更新重建与正式密钥管理仍需完成。
+FPM 服务托管、生产流量切换和自动健康回退仍为后续范围。
 
 协议与工具依据：[Go Ed25519](https://pkg.go.dev/crypto/ed25519)、
 [GitHub 下载运行产物](https://cli.github.com/manual/gh_run_download)、

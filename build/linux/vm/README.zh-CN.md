@@ -4,6 +4,12 @@
 PHP 8.4.27 → 8.5.12 → 8.4.27，配套 Redis 6.3.0，并连接真实 MySQL 8.4.13。
 源码包必须先通过阶段 A 的源码签名、编译、上游测试子集、SDK 与运行容器验收。
 
+2026-10-28 的[实际 VM 验收](https://github.com/longyongzhong/phpm/actions/runs/40697707730)
+已通过 21 项检查：独立客体内核为 `6.12.113+deb13-cloud-amd64`，宿主为
+`7.0.0-1017-azure`，实际版本序列为 8.4.27 → 8.5.12 → 8.4.27。
+MySQL 8.4.13、Redis 6.3.0 和两个 FPM 版本均实测，122.36 秒完成 41 轮重复检查。
+详细证据与一次失败后修复的诊断问题见 [验证记录](../../../docs/validation.md)。
+
 ## 运行
 
 在私有仓库 Actions 手动选择 **Debian VM real PHP upgrade (stage C)**：

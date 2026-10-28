@@ -6,6 +6,10 @@ Linux 官方源码构建已在 GitHub Actions 完成首次验证，面向 Debian
 签名目录和锁文件精确恢复，见 [分发与安装](docs/distribution.zh-CN.md)。
 默认下载源保持不变；正式签名密钥与生产部署尚未启用。
 
+阶段 C 已在独立 Debian VM 中完成真实 8.4.27 → 8.5.12 → 回退，验证 MySQL、Redis、
+FPM 与旧进程保持原版本；范围和运行方式见 [VM 验收说明](build/linux/vm/README.zh-CN.md)。
+这轮使用内置用例，实际业务项目尚未验证。
+
 [English](README.md)
 
 PHPM 为每个项目生成独立的 PHP CLI 环境，跨项目共享 PHP 构建与兼容扩展。
