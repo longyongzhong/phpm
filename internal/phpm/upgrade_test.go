@@ -232,7 +232,7 @@ func testNativeUpgradeLifecycle(t *testing.T, s *Store, base Runtime, fixture, b
 	if err != nil && path == "" {
 		t.Fatal(err)
 	}
-	if filepath.Clean(path) != s.runtimeBinary(base) {
+	if !sameExistingFile(path, s.runtimeBinary(base)) {
 		t.Fatalf("running process unexpectedly changed PHP: %q", path)
 	}
 	if err := process.Wait(); err != nil {

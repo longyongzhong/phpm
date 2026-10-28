@@ -296,8 +296,12 @@ func (s *Store) probeEnvironment(env LockedEnvironment, root string) error {
 	if err := json.Unmarshal(output, &result); err != nil {
 		return fmt.Errorf("invalid environment probe output: %w", err)
 	}
-	if result.Version != env.Runtime.PHP.Version || filepath.Clean(result.INI) != filepath.Join(root, "php.ini") {
-		return errors.New("PHP loaded an unexpected runtime/configuration")
+	if result.Version != env.Runtime.PHP.Version {
+		return fmt.Errorf("PHP runtime version differs: expected %q, got %q", env.Runtime.PHP.Version, result.Version)
+	}
+	expectedINI := filepath.Join(root, "php.ini")
+	if !sameExistingFile(result.INI, expectedINI) {
+		return fmt.Errorf("PHP loaded an unexpected configuration: expected %q, got %q", expectedINI, result.INI)
 	}
 	if scanned, ok := result.Scanned.(string); ok && strings.TrimSpace(scanned) != "" {
 		return errors.New("PHP unexpectedly scanned extra INI files")
@@ -313,6 +317,21 @@ func (s *Store) probeEnvironment(env LockedEnvironment, root string) error {
 		return fmt.Errorf("loaded extensions differ from the environment: expected %v, got %v", expected, result.Extensions)
 	}
 	return nil
+}
+
+// PHP reports canonical paths, which can differ from Go's spelling for Windows
+// short names/case or macOS /var aliases. Require the exact same existing file,
+// rather than accepting matching contents or loosely normalizing path strings.
+func sameExistingFile(left, right string) bool {
+	if !filepath.IsAbs(left) || !filepath.IsAbs(right) {
+		return false
+	}
+	a, err := os.Stat(left)
+	if err != nil || !a.Mode().IsRegular() {
+		return false
+	}
+	b, err := os.Stat(right)
+	return err == nil && b.Mode().IsRegular() && os.SameFile(a, b)
 }
 
 func (s *Store) current(root string) (LockedEnvironment, error) {

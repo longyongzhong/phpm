@@ -171,7 +171,7 @@ func testNativeComposerIntegration(t *testing.T, s *Store, root string, env Lock
 		if err := json.Unmarshal(output, &result); err != nil {
 			t.Fatal(err)
 		}
-		if result.PHP != env.Runtime.PHP.Version || filepath.Clean(result.Binary) != s.runtimeBinary(env.Runtime) || len(result.Args) != 3 || result.Args[2] != "argument with spaces" {
+		if result.PHP != env.Runtime.PHP.Version || !sameExistingFile(result.Binary, s.runtimeBinary(env.Runtime)) || len(result.Args) != 3 || result.Args[2] != "argument with spaces" {
 			t.Fatalf("wrong forwarded context: %+v", result)
 		}
 	}

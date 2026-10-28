@@ -134,7 +134,11 @@ func TestNativeProjectIsolation(t *testing.T) {
 		if err := json.Unmarshal([]byte(p.output.String()), &result); err != nil {
 			t.Fatal(err)
 		}
-		if result.Redis != configs[i].Extensions["redis"] || result.Memory != configs[i].INI["memory_limit"] || filepath.Clean(result.PHP) != s.runtimeBinary(rt) {
+		expectedRedis := configs[i].Extensions["redis"]
+		if expectedRedis == "" {
+			expectedRedis = rt.PHP.Extensions["redis"]
+		}
+		if result.Redis != expectedRedis || result.Memory != configs[i].INI["memory_limit"] || !sameExistingFile(result.PHP, s.runtimeBinary(rt)) {
 			t.Fatalf("project %d leaked state: %+v", i, result)
 		}
 	}

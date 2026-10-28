@@ -4,6 +4,7 @@ build-essential
 ca-certificates
 curl
 gnupg
+gpgv
 libcurl4-openssl-dev
 libjpeg62-turbo-dev
 libonig-dev
