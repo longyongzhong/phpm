@@ -59,6 +59,15 @@ func TestNativeProjectIsolation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Run("extension startup diagnostics retain the actual cause", func(t *testing.T) {
+		missing := filepath.Join(t.TempDir(), "phpm_missing_extension.so")
+		for _, zend := range []bool{false, true} {
+			_, err := s.inspectExtension(rt, "phpm_missing_extension", missing, zend)
+			if err == nil || !strings.Contains(err.Error(), "PHP emitted startup diagnostics") || !strings.Contains(err.Error(), "phpm_missing_extension") {
+				t.Fatalf("loader zend=%v lost its startup diagnostic: %v", zend, err)
+			}
+		}
+	})
 	// A valid user configuration that would change PHP must not leak in.
 	poison := t.TempDir()
 	if err := os.WriteFile(filepath.Join(poison, "poison.ini"), []byte("memory_limit=64M\n"), 0600); err != nil {
@@ -67,8 +76,8 @@ func TestNativeProjectIsolation(t *testing.T) {
 	t.Setenv("PHP_INI_SCAN_DIR", poison)
 	t.Setenv("PHPRC", poison)
 	configs := []Config{
-		{Schema: 1, PHP: rt.PHP.Version, INI: map[string]string{"memory_limit": "128M"}},
-		{Schema: 1, PHP: rt.PHP.Version, INI: map[string]string{"memory_limit": "256M"}},
+		{Schema: 1, PHP: rt.PHP.Version, INI: map[string]string{"memory_limit": "128M", "display_errors": "1"}},
+		{Schema: 1, PHP: rt.PHP.Version, INI: map[string]string{"memory_limit": "256M", "display_errors": "0"}},
 	}
 	module := os.Getenv("PHPM_TEST_REDIS_MODULE")
 	if module != "" {

@@ -154,7 +154,11 @@ func (s *Store) inspectExtension(rt Runtime, name, path string, zend bool, extra
 	paths = append(paths, extraPaths...)
 	paths = append(paths, os.Getenv("PATH"))
 	env := cleanEnv(map[string]string{"PATH": strings.Join(paths, string(os.PathListSeparator)), "PHPRC": filepath.Join(s.Home, "tmp"), "PHP_INI_SCAN_DIR": filepath.Join(s.Home, "tmp")})
-	output, err := phpOutput(s.runtimeBinary(rt), []string{"-n", "-d", key + "=" + path, "-r", code}, env)
+	// Startup warnings can otherwise be printed to stdout (notably on PHP 8.5),
+	// hiding the ABI/dependency diagnostic behind a JSON parse error. These flags
+	// apply only to this configuration-free probe, never the project environment.
+	output, err := phpOutput(s.runtimeBinary(rt), []string{"-n", "-d", "display_errors=stderr",
+		"-d", "display_startup_errors=1", "-d", "log_errors=0", "-d", key + "=" + path, "-r", code}, env)
 	if err != nil {
 		return "", fmt.Errorf("extension %s is incompatible or has missing dependencies: %w", name, err)
 	}

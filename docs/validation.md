@@ -518,3 +518,38 @@ Its test catalog expires at `2026-10-28T12:36:59Z`; source-registration/acquisit
 after that date must use a newly signed catalog. The local maintainer smoke-test
 seed was deleted after use; its public key and already signed bundle were retained.
 Final API inspection still confirmed private repository visibility.
+
+### Real PHP 8.5 source build and VM acceptance (2026-10-28)
+
+The user selected built-in acceptance only; their business project is deferred.
+The pinned second source recipe uses official PHP 8.5.12 tar.xz SHA-256
+`08bc2eba2a588654ade1357174aa646b761556c862dda0678345ee29ed481209` and the
+release-manager public key documented in `build/linux/keys/README.md`.
+PHP 8.5's built-in OPcache is checked explicitly rather than accepting a missing
+shared module as a successful build.
+
+[Source run 40691767507](https://github.com/longyongzhong/phpm/actions/runs/40691767507)
+passed on `c5830e75830cff9e640e39202e02288b1453d0b3`. The upstream test subset
+reported 348 passes, 101 skips, one expected failure, zero unexpected failures and
+zero warnings (450 cases). The matching relocated SDK rebuilt/loaded Redis, and
+all fresh-container runtime/Composer/FPM gates passed. Build ID:
+`php-8.5.12-debian13-x86_64-nts-b1-76c8d1160db5`.
+
+The two-version source changes and the VM controller commit `40896f6` passed their
+respective cross-platform CI runs `40691701891` and `40695238545`. Local Python
+helper tests reported 15 passes and one optional source-input skip, including fixed
+VM/MySQL inputs, cloud-init setup and bounded HTTP range/path validation.
+Workflow YAML, action pins, read-only permissions and extracted shell steps passed
+local syntax/scope checks. These checks alone do not establish VM acceptance.
+
+The first VM run `40695290229` booted the fixed Debian image with its own kernel,
+set up the owned MySQL instance, installed PHP 8.4 and prepared a real PHP 8.5
+candidate. Both CLI database/Redis probes and the old FPM probe reached success.
+It then failed the negative old-Redis-SO import assertion: the import was refused,
+but PHP's startup warning reached stdout and was replaced by a JSON parse error,
+losing the expected ABI detail. The assertion was retained. Extension-only `-n`
+probes now explicitly route startup diagnostics to stderr without changing the
+project's INI or application execution flags. Native missing-module checks cover
+both ordinary/Zend loaders, with opposite project `display_errors` settings.
+The Windows native PHP/Composer/two-Redis regression and vet passed after this fix
+(25.245 seconds for the PHPM tests). A new VM run is required for final acceptance.
