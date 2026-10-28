@@ -1,0 +1,12 @@
+{
+  "schema": 1,
+  "image": {
+    "url": "https://cloud.debian.org/images/cloud/trixie/20261026-2643/debian-13-genericcloud-amd64-20261026-2643.qcow2",
+    "sha512": "3ace18e33bdd036edb49d1f79342bd01d2ab980e35194edb0b410435cd543538d286a0bd13bbb0835f7862306e3d385ce2f6a70d8ecf0bd961111166adbc1b8e"
+  },
+  "mysql_image": "mysql:8.4.13@sha256:2068651a18ac6048578647ea57b940ca2daed3f504ebe7fba6a93beeb39aaa1f",
+  "mysql_version": "8.4.13",
+  "base_php": "8.4.27",
+  "target_php": "8.5.12",
+  "redis": "6.3.0"
+}

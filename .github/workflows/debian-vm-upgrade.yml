@@ -1,0 +1,76 @@
+name: Debian VM real PHP upgrade (stage C)
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_run:
+        description: Successful stage-A PHP 8.4 run ID
+        required: true
+        type: string
+        default: '40666487813'
+      target_run:
+        description: Successful stage-A PHP 8.5 run ID
+        required: true
+        type: string
+      soak_seconds:
+        description: Bounded CLI/FPM database soak duration (not long-term qualification)
+        type: choice
+        default: '120'
+        options: ['120', '600', '1800']
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  independent-vm:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Install disposable VM test tools on the hosted runner
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends qemu-system-x86 qemu-utils cloud-image-utils openssh-client openssl
+      - name: Fetch accepted source-build packages
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE_RUN: ${{ inputs.base_run }}
+          TARGET_RUN: ${{ inputs.target_run }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          fetch_build() {
+            local role="$1" run_id="$2"
+            [[ "$run_id" =~ ^[1-9][0-9]*$ ]] || { echo 'Invalid source run ID'; exit 1; }
+            gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id" > "$RUNNER_TEMP/$role-run.json"
+            python3 - "$RUNNER_TEMP/$role-run.json" <<'PY'
+          import json, os, sys
+          r = json.load(open(sys.argv[1]))
+          if r['conclusion'] != 'success' or r['path'] != '.github/workflows/debian-source-build.yml' or r['repository']['full_name'] != os.environ['GITHUB_REPOSITORY']:
+              raise SystemExit('Expected a successful same-repository source build')
+          PY
+            local attempt
+            attempt=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["run_attempt"])' "$RUNNER_TEMP/$role-run.json")
+            gh run download "$run_id" --repo "$GITHUB_REPOSITORY" --name "phpm-debian13-source-build-$run_id-$attempt" --dir "$RUNNER_TEMP/$role-packages"
+          }
+          fetch_build base "$BASE_RUN"
+          fetch_build target "$TARGET_RUN"
+      - name: Validate controller and fixture helpers
+        run: python3 -m unittest discover -s build/linux/tests -v
+      - name: Boot independent Debian VM and test actual PHP 8.4 to 8.5 to 8.4
+        env:
+          SOAK_SECONDS: ${{ inputs.soak_seconds }}
+        run: python3 build/linux/vm/run.py --base "$RUNNER_TEMP/base-packages" --target "$RUNNER_TEMP/target-packages" --output "$RUNNER_TEMP/phpm-vm-report" --soak-seconds "$SOAK_SECONDS"
+      - name: Retain only reports and diagnostics, never VM disks or keys
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: phpm-debian13-vm-acceptance-${{ github.run_id }}
+          path: ${{ runner.temp }}/phpm-vm-report/
+          if-no-files-found: warn
+          retention-days: 14
