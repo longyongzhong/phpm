@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+          tools: composer:2
+      - name: Build CLI for subprocess tests
+        run: go build -o bin/phpm-test.exe ./cmd/phpm
+      - name: Test with native PHP
+        env:
+          PHPM_TEST_PHP_BINARY: php
+          PHPM_TEST_CLI_BINARY: ${{ github.workspace }}/bin/phpm-test.exe
+        run: go test -count=1 ./...
+      - name: Vet
+        run: go vet ./...
+
+  linux-bootstrap:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Bootstrap managed PHP without a preinstalled interpreter
+        shell: bash
+        run: |
+          set -eu
+          stage=$(mktemp -d)
+          go build -o "$stage/phpm" ./cmd/phpm
+          go test -c -o "$stage/phpm.test" ./internal/phpm
+          cp scripts/test-linux-prebuilt.sh "$stage/run-tests.sh"
+          mkdir "$stage/fixtures"
+          curl -fSL --retry 2 https://getcomposer.org/download/2.10.3/composer.phar -o "$stage/fixtures/composer.phar"
+          cd "$stage"
+          printf '%s\n' '7a2d379d5b8ffdaa028580ef26494c36d2feef4b178d3dd1473a4dbc5e17c8d6  fixtures/composer.phar' | sha256sum -c -
+          sha256sum phpm phpm.test run-tests.sh fixtures/composer.phar > SHA256SUMS
+          sh run-tests.sh --bootstrap

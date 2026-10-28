@@ -1,0 +1,4 @@
+schema: 1
+php: "8.4"
+ini:
+  memory_limit: "256M"

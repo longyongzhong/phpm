@@ -1,0 +1,26 @@
+{
+  "schema": 1,
+  "target": "debian13-x86_64-nts",
+  "build_revision": 1,
+  "base_image": "debian:13-slim@sha256:1e1a22175fbf1b32157ddaf0219e1db4e5401fab2b94ed285add64d18587cd2d",
+  "apt_snapshot": "20261028T030000Z",
+  "source_date_epoch": 1792540800,
+  "php": {
+    "version": "8.4.27",
+    "url": "https://www.php.net/distributions/php-8.4.27.tar.xz",
+    "sha256": "dcf93923b0e38e0d5252b25b796520b5a47761a08b3488b6d0b5d1115764d3f0",
+    "signature_url": "https://www.php.net/distributions/php-8.4.27.tar.xz.asc",
+    "signer": "9D7F99A0CB8F05C8A6958D6256A97AF7600A39A6",
+    "key": "keys/php-8.4.asc"
+  },
+  "redis": {
+    "version": "6.3.0",
+    "url": "https://pecl.php.net/get/redis-6.3.0.tgz",
+    "sha256": "0d5141f634bd1db6c1ddcda053d25ecf2c4fc1c395430d534fd3f8d51dd7f0b5"
+  },
+  "composer": {
+    "version": "2.10.3",
+    "url": "https://getcomposer.org/download/2.10.3/composer.phar",
+    "sha256": "7a2d379d5b8ffdaa028580ef26494c36d2feef4b178d3dd1473a4dbc5e17c8d6"
+  }
+}

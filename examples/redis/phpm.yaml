@@ -1,0 +1,7 @@
+# Import the matching local Redis artifact before running phpm install.
+schema: 1
+php: "8.4"
+extensions:
+  redis: "6.2.0"
+ini:
+  memory_limit: "256M"

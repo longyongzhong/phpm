@@ -1,0 +1,8 @@
+/.cache/
+/bin/
+/phpm
+/phpm.exe
+/.phpm/
+/.phpm-transaction.json
+*.test
+/build/linux/**/__pycache__/

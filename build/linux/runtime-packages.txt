@@ -1,0 +1,12 @@
+ca-certificates
+libc6
+libcurl4t64
+libjpeg62-turbo
+libonig5
+libpng16-16t64
+libsqlite3-0
+libssl3t64
+libxml2
+libzip5
+tzdata
+zlib1g
