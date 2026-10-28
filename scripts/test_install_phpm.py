@@ -5,6 +5,7 @@ from pathlib import Path
 import tarfile
 import tempfile
 import unittest
+from unittest.mock import Mock, patch
 import zipfile
 
 spec = importlib.util.spec_from_file_location("installer", Path(__file__).with_name("install-phpm.py"))
@@ -13,6 +14,30 @@ spec.loader.exec_module(installer)
 
 
 class InstallerTests(unittest.TestCase):
+    def test_commit_refuses_existing_destination(self):
+        payload, destination = Mock(), Mock()
+        destination.exists.return_value = True
+        with self.assertRaises(ValueError):
+            installer.commit_install(payload, destination)
+        payload.rename.assert_not_called()
+
+    def test_windows_rename_retry_is_bounded(self):
+        payload, destination = Mock(), Mock()
+        destination.exists.return_value = False
+        destination.is_symlink.return_value = False
+        error = PermissionError("unit sharing conflict")
+        error.winerror = 32
+        with patch.object(installer.os, "name", "nt"), patch.object(installer.time, "sleep") as sleep:
+            payload.rename.side_effect = [error, None]
+            installer.commit_install(payload, destination)
+            self.assertEqual(payload.rename.call_count, 2)
+            self.assertEqual(sleep.call_count, 1)
+            payload.reset_mock()
+            payload.rename.side_effect = error
+            with self.assertRaises(PermissionError):
+                installer.commit_install(payload, destination)
+            self.assertEqual(payload.rename.call_count, 16)
+
     def test_ambiguous_metadata(self):
         for data in (b'{"schema":1,"schema":1}', b'{"schema":1,"extra":0}', b'{"schema":1} {}'):
             with self.assertRaises(ValueError):

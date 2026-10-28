@@ -56,6 +56,7 @@ jobs:
         run: |
           go test -count=1 ./internal/catalog ./internal/phpm
           python3 scripts/test_install_phpm.py
+          python3 -m unittest discover -s build/release -p 'test_*.py'
       - name: Build and verify disposable-key client and PHP distribution
         run: python3 build/release/preview.py --base "$RUNNER_TEMP/base-packages" --target "$RUNNER_TEMP/target-packages" --output "$RUNNER_TEMP/release"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

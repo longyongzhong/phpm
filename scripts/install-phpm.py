@@ -20,6 +20,7 @@ import stat
 import subprocess
 import tarfile
 import tempfile
+import time
 from urllib.error import HTTPError
 from urllib.parse import urlsplit
 from urllib.request import HTTPRedirectHandler, HTTPSHandler, Request, build_opener
@@ -216,7 +217,24 @@ def extract(archive, destination, target):
     return destination / binary
 
 
+def commit_install(payload, destination):
+    # Windows file scanners can briefly hold freshly written executable files.
+    # Retry only the final rename, never validation or overwriting a destination.
+    for attempt in range(16):
+        if destination.exists() or destination.is_symlink():
+            raise ValueError("destination appeared during installation; nothing was replaced")
+        try:
+            payload.rename(destination)
+            return
+        except PermissionError as error:
+            if os.name != "nt" or error.winerror not in (5, 32, 33) or attempt == 15:
+                raise
+            time.sleep(0.2)
+
+
 def install(args):
+    if args.dest.is_symlink():
+        raise ValueError("destination must not be a symbolic link")
     destination = args.dest.resolve()
     if destination.exists() or destination.is_symlink():
         raise ValueError("destination must not already exist")
@@ -295,9 +313,7 @@ def install(args):
         receipt = {"schema": 1, "version": manifest["version"], "commit": manifest["commit"], "root_sha256": digest(root),
                    "authorization_version": trust["version"], "package_sha256": selected["sha256"], "platform": target}
         (payload / "installation.json").write_text(json.dumps(receipt, indent=2) + "\n")
-        if destination.exists():
-            raise ValueError("destination appeared during installation; nothing was replaced")
-        payload.rename(destination)
+        commit_install(payload, destination)
     return {"status": "installed", "directory": str(destination), **receipt}
 
 
