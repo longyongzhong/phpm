@@ -17,6 +17,20 @@ import time
 from common import extract_archive, output, run, sha256, write_json
 
 
+class TLSProbeHandler(http.server.BaseHTTPRequestHandler):
+    protocol_version = "HTTP/1.1"
+
+    def do_GET(self):
+        payload = b"phpm-https-ok"
+        self.send_response(200)
+        self.send_header("Content-Type", "text/plain")
+        # OpenSSL 3 rejects a missing TLS close_notify. Delimit the HTTP body
+        # explicitly so clients do not depend on socket EOF to finish reading.
+        self.send_header("Content-Length", str(len(payload)))
+        self.end_headers()
+        self.wfile.write(payload)
+
+
 @contextmanager
 def service(args, log, **kwargs):
     with log.open("w+") as stream:
@@ -151,13 +165,7 @@ def main():
              "-subj", "/CN=localhost", "-addext", "subjectAltName=DNS:localhost",
              "-keyout", key, "-out", cert], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
-        class Handler(http.server.BaseHTTPRequestHandler):
-            def do_GET(self):
-                self.send_response(200)
-                self.end_headers()
-                self.wfile.write(b"phpm-https-ok")
-
-        server = http.server.HTTPServer(("127.0.0.1", 0), Handler)
+        server = http.server.HTTPServer(("127.0.0.1", 0), TLSProbeHandler)
         tls = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         tls.load_cert_chain(cert, key)
         server.socket = tls.wrap_socket(server.socket, server_side=True)

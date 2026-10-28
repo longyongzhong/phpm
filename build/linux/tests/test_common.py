@@ -1,4 +1,7 @@
 import io
+import http.client
+import http.server
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -7,6 +10,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import threading
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -154,6 +158,30 @@ class SourceVerificationTests(unittest.TestCase):
             signature.write_bytes(b"invalid release signature\n")
             with self.assertRaises(subprocess.CalledProcessError):
                 verify_inputs(ROOT, directory, gpg, gpgv)
+
+
+class ProbeHTTPTests(unittest.TestCase):
+    def test_response_is_framed_without_waiting_for_socket_eof(self):
+        spec = importlib.util.spec_from_file_location("runtime_probe", ROOT / "verify-runtime.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        server = http.server.HTTPServer(("127.0.0.1", 0), module.TLSProbeHandler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        connection = http.client.HTTPConnection("127.0.0.1", server.server_port, timeout=3)
+        try:
+            # Both responses must finish on a reusable connection, without EOF.
+            for _ in range(2):
+                connection.request("GET", "/")
+                response = connection.getresponse()
+                self.assertEqual(response.version, 11)
+                self.assertEqual(response.getheader("Content-Length"), str(len(b"phpm-https-ok")))
+                self.assertEqual(response.read(), b"phpm-https-ok")
+        finally:
+            connection.close()
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=5)
 
 
 if __name__ == "__main__":
