@@ -6,16 +6,24 @@ try {
     if (!extension_loaded('phar')) {
         throw new RuntimeException('The project PHP needs the phar extension to inspect Composer.');
     }
-    $autoload = 'phar://' . $argv[1] . '/vendor/autoload.php';
+    $composerPath = realpath($argv[1]);
+    if ($composerPath === false) {
+        throw new RuntimeException('The selected Composer PHAR no longer exists.');
+    }
+    $composerPrefix = 'phar://' . str_replace('\\', '/', $composerPath) . '/';
+    $autoload = $composerPrefix . 'vendor/autoload.php';
     if (!is_file($autoload)) {
         throw new RuntimeException('Extension checks require a Composer 2 PHAR; set PHPM_COMPOSER to its path.');
     }
     // Older Composer releases can still inspect requirements on newer PHP.
     // Record their deprecations as diagnostics instead of corrupting JSON or
     // treating them as checker failure. Other PHP diagnostics keep normal handling.
-    $composerPrefix = str_replace('\\', '/', 'phar://' . $argv[1] . '/');
     set_error_handler(static function (int $level, string $message, string $file, int $line) use (&$composerDeprecations, $composerPrefix): bool {
-        if (($level === E_DEPRECATED || $level === E_USER_DEPRECATED) && strpos(str_replace('\\', '/', $file), $composerPrefix) === 0) {
+        $file = str_replace('\\', '/', $file);
+        $insideComposer = PHP_OS_FAMILY === 'Windows'
+            ? strncasecmp($file, $composerPrefix, strlen($composerPrefix)) === 0
+            : strpos($file, $composerPrefix) === 0;
+        if (($level === E_DEPRECATED || $level === E_USER_DEPRECATED) && $insideComposer) {
             $composerDeprecations[] = ['level' => 'deprecated', 'message' => $message, 'file' => $file, 'line' => $line];
             return true;
         }

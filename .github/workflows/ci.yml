@@ -25,12 +25,20 @@ jobs:
           php-version: '8.4'
           coverage: none
           tools: composer:2
+      - name: Download pinned Composer PHAR for native checks
+        shell: bash
+        run: |
+          set -eu
+          cd "$RUNNER_TEMP"
+          curl -fSL --retry 2 https://getcomposer.org/download/2.10.3/composer.phar -o phpm-composer.phar
+          printf '%s\n' '7a2d379d5b8ffdaa028580ef26494c36d2feef4b178d3dd1473a4dbc5e17c8d6  phpm-composer.phar' | sha256sum -c -
       - name: Build CLI for subprocess tests
         run: go build -o bin/phpm-test.exe ./cmd/phpm
       - name: Test with native PHP
         env:
           PHPM_TEST_PHP_BINARY: php
           PHPM_TEST_CLI_BINARY: ${{ github.workspace }}/bin/phpm-test.exe
+          PHPM_TEST_COMPOSER: ${{ runner.temp }}/phpm-composer.phar
         run: go test -count=1 ./...
       - name: Vet
         run: go vet ./...

@@ -193,6 +193,11 @@ func testComposerDiagnosticHandling(t *testing.T, s *Store, root string, env Loc
 		t.Fatal(err)
 	}
 	t.Setenv("COMPOSER", manifest)
+	outside := filepath.Join(dir, "outside.php")
+	if err := os.WriteFile(outside, []byte("<?php trigger_error('fixture outside-deprecated', E_USER_DEPRECATED);"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	outsideRequire := "require '" + strings.ReplaceAll(strings.ReplaceAll(outside, `\`, `\\`), "'", `\'`) + "'"
 	// Copy the trusted PHAR and wrap its autoloader inside that same archive.
 	// Actual Composer classes still perform the check; fixtures only inject a
 	// diagnostic, so a warning cannot be mistaken for a valid checker result.
@@ -205,6 +210,7 @@ func testComposerDiagnosticHandling(t *testing.T, s *Store, root string, env Loc
 		{"deprecated", `trigger_error('fixture deprecation', E_USER_DEPRECATED)`, false},
 		{"warning", `trigger_error('fixture warning', E_USER_WARNING)`, true},
 		{"exception", `throw new RuntimeException('fixture exception')`, true},
+		{"outside-deprecated", outsideRequire, true},
 	} {
 		t.Run(fixture.name, func(t *testing.T) {
 			payload := filepath.Join(dir, fixture.name+".phar")
