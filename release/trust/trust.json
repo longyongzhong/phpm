@@ -1,0 +1,14 @@
+{
+  "schema": 1,
+  "version": 1,
+  "root_sha256": "b9aaa6269e68f95ea18147d09c043ca9c8ae332903e0bc04b23c34ad98e35d32",
+  "issued_at": "2026-10-29T03:11:37Z",
+  "expires_at": "2027-10-29T03:11:37Z",
+  "keys": [
+    {
+      "id": "ccd42a85a9d526410856a3aaceb25a71cda05dd5e6f1bb5e754da4ea54cb63c9",
+      "public_key": "oRdGDWVJLXySWgvx0apdJ43k+UvZ+KUwM4p8fcJ9FmI="
+    }
+  ],
+  "revoked": []
+}
