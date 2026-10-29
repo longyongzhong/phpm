@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build allowlisted unsigned materials for operator-held offline keys; never upload a formal private key."""
+"""Build allowlisted unsigned materials; no formal private key is used by this build job."""
 import argparse
 import hashlib
 import json
@@ -86,7 +86,10 @@ def prepare(args):
                       "request_sha256": digest, "output": str(output), "formal_private_keys_used": False}))
     if os.environ.get("GITHUB_STEP_SUMMARY"):
         with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
-            summary.write(f"Candidate: `{args.version}`\n\nSource: `{commit}`\n\nRelease request SHA-256: `{digest}`\n\nUnsigned materials only; formal private keys stay offline.\n")
+            summary.write(f"Candidate: `{args.version}`\n\nSource: `{commit}`\n\nRelease request SHA-256: `{digest}`\n\nUnsigned materials only; no formal private key is used by this build job.\n")
+    if os.environ.get("GITHUB_OUTPUT"):
+        with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as outputs:
+            outputs.write(f"request_sha256={digest}\n")
 
 
 def main():

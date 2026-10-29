@@ -1,5 +1,7 @@
 # PHPM：我构建，你离线签名，再上传草稿
 
+这是可选的完全离线路线。当前日常发布改用 [GitHub 自动签名](github-release.zh-CN.md)，首次初始化后只配置一个 Environment Secret。
+
 适用：Windows/Linux amd64 离线签名设备，需要 Python 3.10+。正式根私钥和发布私钥都留在你管理的加密存储中；不要放进仓库、网站目录、GitHub Secrets 或聊天。
 
 ## 1. 我负责构建材料

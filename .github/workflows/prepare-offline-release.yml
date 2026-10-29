@@ -1,6 +1,20 @@
 name: Prepare unsigned offline release materials
 
 on:
+  workflow_call:
+    inputs:
+      version:
+        type: string
+        required: true
+      base_run:
+        type: string
+        required: true
+      target_run:
+        type: string
+        required: true
+    outputs:
+      request_sha256:
+        value: ${{ jobs.prepare.outputs.request_sha256 }}
   workflow_dispatch:
     inputs:
       version:
@@ -24,6 +38,8 @@ jobs:
   prepare:
     runs-on: ubuntu-24.04
     timeout-minutes: 25
+    outputs:
+      request_sha256: ${{ steps.materials.outputs.request_sha256 }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
@@ -69,11 +85,14 @@ jobs:
           python3 scripts/test_install_phpm.py
           python3 -m unittest discover -s build/release -p 'test_*.py'
       - name: Build versioned clients and unsigned signing materials
+        id: materials
         env:
           CANDIDATE_VERSION: ${{ inputs.version }}
         run: python3 build/release/prepare.py --base "$RUNNER_TEMP/base-packages" --target "$RUNNER_TEMP/target-packages" --version "$CANDIDATE_VERSION" --repo "$GITHUB_REPOSITORY" --provenance "$RUNNER_TEMP/provenance.json" --output "$RUNNER_TEMP/offline-materials"
       - name: Test shipped offline signer with disposable keys and install the real client
         run: python3 build/release/roundtrip.py --materials "$RUNNER_TEMP/offline-materials"
+      - name: Test GitHub signing secret path with disposable keys and install the real client
+        run: python3 build/release/roundtrip.py --materials "$RUNNER_TEMP/offline-materials" --signer github
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: phpm-offline-signing-materials-${{ github.run_id }}

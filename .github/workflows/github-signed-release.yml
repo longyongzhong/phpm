@@ -1,0 +1,104 @@
+name: GitHub signed release draft
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: New client version (for example 0.1.0-rc.1)
+        type: string
+        required: true
+      base_run:
+        description: Successful stage-A PHP 8.4 build run ID
+        type: string
+        required: true
+      target_run:
+        description: Successful stage-A PHP 8.5 build run ID
+        type: string
+        required: true
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: phpm-formal-signing
+  cancel-in-progress: false
+
+jobs:
+  configuration:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Require main and committed public root authorization
+        env:
+          SOURCE_REF: ${{ github.ref }}
+        run: |
+          test "$SOURCE_REF" = refs/heads/main || { echo 'Signing is allowed only from main'; exit 1; }
+          for file in root-key.pub fingerprint.txt trust.json trust.json.sig; do
+            test -f "release/trust/$file" || { echo 'Run phpm-release setup-github, then commit release/trust public files'; exit 1; }
+          done
+
+  prepare:
+    needs: configuration
+    uses: ./.github/workflows/prepare-offline-release.yml
+    with:
+      version: ${{ inputs.version }}
+      base_run: ${{ inputs.base_run }}
+      target_run: ${{ inputs.target_run }}
+
+  sign:
+    needs: prepare
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: phpm-release
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Download this run's checked unsigned materials
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --name "phpm-offline-signing-materials-$GITHUB_RUN_ID" --dir "$RUNNER_TEMP/materials"
+      - name: Sign and verify using the Environment publishing secret
+        env:
+          PHPM_RELEASE_SEED: ${{ secrets.PHPM_RELEASE_SEED }}
+          REQUEST_SHA256: ${{ needs.prepare.outputs.request_sha256 }}
+          CANDIDATE_VERSION: ${{ inputs.version }}
+        run: python3 build/release/github_sign.py --materials "$RUNNER_TEMP/materials" --request-sha256 "$REQUEST_SHA256" --expected-commit "$GITHUB_SHA" --expected-repo "$GITHUB_REPOSITORY" --expected-version "$CANDIDATE_VERSION" --trust release/trust --sequence "$GITHUB_RUN_ID" --output "$RUNNER_TEMP/signed-release"
+      - name: Retain only the verified public release assets
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: phpm-github-signed-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/signed-release/
+          if-no-files-found: error
+          retention-days: 14
+
+  draft:
+    needs: sign
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Reverify signatures and upload an unpublished prerelease draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATE_VERSION: ${{ inputs.version }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --name "phpm-github-signed-$GITHUB_RUN_ID-$RUN_ATTEMPT" --dir "$RUNNER_TEMP/signed-release"
+          go build -trimpath -o "$RUNNER_TEMP/phpm-release" ./cmd/phpm-release
+          fingerprint=$(cat release/trust/fingerprint.txt)
+          python3 build/release/publish.py --repo "$GITHUB_REPOSITORY" --tag "v$CANDIDATE_VERSION" --bundle "$RUNNER_TEMP/signed-release" --root release/trust/root-key.pub --fingerprint "$fingerprint" --verifier "$RUNNER_TEMP/phpm-release" --expected-commit "$GITHUB_SHA" --expected-version "$CANDIDATE_VERSION"

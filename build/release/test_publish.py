@@ -14,7 +14,7 @@ spec.loader.exec_module(publisher)
 
 
 class PublisherTests(unittest.TestCase):
-    def exercise(self, private=True, existing=False, bad_digest=False):
+    def exercise(self, private=True, existing=False, bad_digest=False, mismatch=None):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             (root / "client.zip").write_bytes(b"unit client")
@@ -51,15 +51,19 @@ class PublisherTests(unittest.TestCase):
 
             arguments = ["publish.py", "--repo", "test/phpm", "--tag", "candidate", "--bundle", str(root),
                          "--root", str(root / "root.pub"), "--fingerprint", "b" * 64, "--verifier", str(root / "verifier")]
+            if mismatch:
+                arguments += ["--expected-" + mismatch, "c" * 40 if mismatch == "commit" else "9.9.9"]
             verified = json.dumps({"version": "0.1.0-test", "commit": "a" * 40})
             with patch.object(sys, "argv", arguments), patch.object(publisher, "gh", side_effect=gh), patch.object(publisher.subprocess, "check_output", return_value=verified):
-                if existing or bad_digest:
+                if existing or bad_digest or mismatch:
                     with self.assertRaises(ValueError):
                         publisher.main()
                 else:
                     publisher.main()
             if existing:
                 self.assertFalse(any("--input" in r or r[:2] == ("release", "upload") for r in requests))
+            if mismatch:
+                self.assertEqual(requests, [])
 
     def test_draft_by_id_and_exact_asset_digests(self):
         self.exercise()
@@ -72,6 +76,10 @@ class PublisherTests(unittest.TestCase):
 
     def test_bad_remote_digest_is_not_success(self):
         self.exercise(bad_digest=True)
+
+    def test_wrong_signed_commit_or_version_prevents_github_mutations(self):
+        self.exercise(mismatch="commit")
+        self.exercise(mismatch="version")
 
 
 if __name__ == "__main__":

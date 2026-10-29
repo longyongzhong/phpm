@@ -382,10 +382,11 @@ if your imported build still links to libraries at its original location.
 
 ## Development
 
-Offline root authorization, publishing-key rotation/revocation, signed client
-installation and private draft release commands are documented in the
-[offline release guide](docs/offline-release.zh-CN.md). Formal private keys stay
-with the operator; CI rehearsals use disposable test keys only.
+For routine signing with a GitHub Environment publishing secret and an
+operator-held root key, see the [GitHub release guide](docs/github-release.zh-CN.md).
+Root authorization, publishing-key rotation/revocation, signed client installation
+and fully offline signing are documented in the
+[offline release guide](docs/offline-release.zh-CN.md). Rehearsals use disposable test keys.
 For the build → operator offline signing → draft upload handoff, see the
 [release quickstart](docs/release-quickstart.zh-CN.md).
 

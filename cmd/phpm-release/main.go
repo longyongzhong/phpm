@@ -25,10 +25,12 @@ func main() {
 
 func run(args []string) error {
 	if len(args) == 0 {
-		return errors.New("usage: phpm-release keygen | trust | catalog | clients | verify (use COMMAND --help for flags)")
+		return errors.New("usage: phpm-release setup-github | keygen | trust | catalog | clients | verify (use COMMAND --help for flags)")
 	}
 	set := flag.NewFlagSet(args[0], flag.ContinueOnError)
 	switch args[0] {
+	case "setup-github":
+		return setupGitHubCommand(args[1:])
 	case "trust":
 		return trustCommand(args[1:])
 	case "clients":

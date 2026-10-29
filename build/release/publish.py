@@ -22,11 +22,15 @@ def main():
     parser.add_argument("--fingerprint", required=True)
     parser.add_argument("--verifier", type=Path, required=True, help="reviewed locally built phpm-release executable")
     parser.add_argument("--test-preview", action="store_true")
+    parser.add_argument("--expected-commit", help="require this exact signed source commit")
+    parser.add_argument("--expected-version", help="require this exact signed client version")
     args = parser.parse_args()
     if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", args.repo) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,99}", args.tag):
         raise ValueError("invalid repository or release tag")
     result = json.loads(subprocess.check_output([str(args.verifier.resolve()), "verify", "--bundle", str(args.bundle.resolve()),
         "--root", str(args.root.resolve()), "--fingerprint", args.fingerprint], text=True))
+    if (args.expected_commit and result["commit"] != args.expected_commit) or (args.expected_version and result["version"] != args.expected_version):
+        raise ValueError("signed release does not match the expected source commit/version")
     repo = json.loads(gh("api", "repos/" + args.repo))
     if repo["full_name"].lower() != args.repo.lower() or type(repo.get("private")) is not bool:
         raise ValueError("repository identity/visibility could not be verified")
@@ -36,7 +40,7 @@ def main():
     manifest = json.loads((args.bundle / "clients.json").read_text())
     assets = [args.bundle / item["filename"] for item in manifest["files"]]
     assets += [args.bundle / "clients.json", args.bundle / "clients.json.sig"]
-    notes = ("Disposable TEST keys; not a production trust root.\n" if args.test_preview else "Offline-signed candidate awaiting operator review.\n")
+    notes = ("Disposable TEST keys; not a production trust root.\n" if args.test_preview else "Root-authorized signed candidate awaiting operator review.\n")
     notes += f"Client: {result['version']}\nSource: {result['commit']}\nRoot SHA-256: {args.fingerprint}\n"
     notes += "Individual signed assets are retained here. No private keys are included. This tool only creates drafts.\n"
     pages = json.loads(gh("api", "--paginate", "--slurp", f"repos/{args.repo}/releases?per_page=100"))
