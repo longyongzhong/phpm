@@ -718,7 +718,7 @@ Commit `b10d13be211758f55885e6f37631549e60947e20` passed
 The local native PHP/Composer/two-Redis regression passed (`internal/phpm` 22.107
 seconds), as did vet, two Go initialization-helper tests and twelve Python release
 tests (one Windows symlink fixture skipped locally and exercised on Linux CI).
-Tests cover public/private key mismatch and incomplete-pair preservation, refusing
+Tests cover incomplete-pair preservation and reuse of matching keypairs, refusing
 existing authorization outputs, keeping private/public directories separate,
 secret-file removal on failure, removing the secret from child environments,
 missing/invalid secrets, wrong source commit/repository/version and refusing
@@ -739,5 +739,5 @@ uses the Actions run ID as the catalog sequence, refuses existing releases and
 does not publish automatically. Formal execution of this entire workflow remains
 pending the operator's one-time `phpm-release setup-github`, committing its four
 public authorization files, and entering the publishing Secret in GitHub. The
-published binary `bin/phpm-release.exe` was rebuilt locally with that initializer;
+local binary `bin/phpm-release.exe` was rebuilt with that initializer;
 the initializer was not run against the operator's actual key directory.
