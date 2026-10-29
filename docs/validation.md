@@ -663,3 +663,42 @@ Formal operator commands and first-install trust limitations are documented in
 remain operator actions. Business-project acceptance, long-term qualification,
 production FPM/traffic switching and additional OS/architecture targets remain
 outside this milestone.
+
+## Public repository and offline operator handoff (2026-10-29)
+
+The user changed `longyongzhong/phpm` to public. The repository identity and
+`private: false` were verified through the authenticated API before this work.
+Draft upload now supports both visibilities, preserves the draft-only boundary,
+rejects existing releases and checks the uploaded asset set, sizes and digests.
+No repository visibility or existing release was changed by these scripts.
+
+Commit `d7ec5504bfe39e1b261b8d12c5b5f0967a99156f` passed
+[all cross-platform CI jobs](https://github.com/longyongzhong/phpm/actions/runs/40806254617).
+Local native PHP/Composer/two-Redis regression and signature interoperability also
+passed (`internal/phpm` 27.142 seconds), as did vet. The eight release-helper tests
+passed locally with only the unavailable Windows symlink fixture skipped; Linux
+CI ran that fixture. Release builds can embed the candidate version; ordinary
+development builds continue to report `0.1.0-dev`.
+
+[Offline materials run 40806351995](https://github.com/longyongzhong/phpm/actions/runs/40806351995)
+successfully built candidate `0.1.0-rc.1` from the previously accepted stage-A
+runs `40666487813` and `40691767507`. The artifact is
+`phpm-offline-signing-materials-40806351995` (ID `12868855155`, 49,454,055 bytes),
+GitHub archive SHA-256 `882aa7edf435a36b769a8c0437135ea60d74b54531ee7f6e25fc13d2f02fcf26`.
+The **release-inputs.json** request SHA-256 used by the offline signer is
+`6cb4fd070711fe58f6569ce57175678a2ac9fafa54940692626dff4945de3826`.
+The archive hash and request hash name different objects and are not interchangeable.
+The shipped offline script signed the real inputs using discarded test keys,
+verified all 21 release assets, installed the real client and observed
+`phpm version == 0.1.0-rc.1`. All materials were hashed and checked before upload;
+no formal private key was used and no test private key was uploaded.
+
+[Public-repository rehearsal 40806359085](https://github.com/longyongzhong/phpm/actions/runs/40806359085)
+also passed, creating draft `427400608`, tag `stage-d-test-40806359085`, with 23
+digest-verified assets. This is an unpublished test-key draft, not the operator's
+formally signed release. Instructions for operator-held keys and one-command
+offline signing are in `docs/release-quickstart.zh-CN.md`, also included in the
+materials as `OFFLINE-GUIDE.md`. Formal signing remains pending operator action;
+only the resulting public assets and independently checked public root/fingerprint
+need to return to the connected publisher. Publishing the formal release remains
+a separate decision after draft review.
