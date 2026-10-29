@@ -741,3 +741,39 @@ pending the operator's one-time `phpm-release setup-github`, committing its four
 public authorization files, and entering the publishing Secret in GitHub. The
 local binary `bin/phpm-release.exe` was rebuilt with that initializer;
 the initializer was not run against the operator's actual key directory.
+
+## First operator-key signed release draft (2026-10-29)
+
+The operator completed initialization and configured `PHPM_RELEASE_SEED`.
+Only the four public authorization files were inspected and committed in
+`ff6fbd0c3ed5506d268ea6ebfdf964e47817b5f7`. The root signature/fingerprint and
+agreement with local public key files were verified without reading seed files.
+Environment metadata confirmed the secret exists and only `main` is allowed.
+
+[Release run 40814792546](https://github.com/longyongzhong/phpm/actions/runs/40814792546)
+passed configuration, reusable material preparation, publishing-key signing and
+draft upload. Its source commit also passed
+[all CI jobs](https://github.com/longyongzhong/phpm/actions/runs/40811330061).
+The version is `0.1.0-rc.1`; root fingerprint:
+`b9aaa6269e68f95ea18147d09c043ca9c8ae332903e0bc04b23c34ad98e35d32`.
+Authorization version is 1 and catalog sequence `40814792546` covers PHP
+`8.4.27` and `8.5.12`.
+
+Draft `427450758`, tag `v0.1.0-rc.1`, contains 23 assets, all checked for their
+exact remote names, sizes and SHA-256 after upload.
+[Review the draft](https://github.com/longyongzhong/phpm/releases/tag/untagged-a1dcc77c4d5ef263ba26).
+It remains `draft: true`, `prerelease: true`; public issuance is a separate decision.
+
+Eight selected assets were independently downloaded with GitHub digest checks to
+`.cache/client-release-427450758/`. The catalog signature was verified against
+the pinned operator root. The Python/OpenSSL installer verified the Windows
+archive, installed it into `.cache/operator-client-0.1.0-rc.1/` and the executable
+reported `0.1.0-rc.1`. Windows archive SHA-256:
+`357ff41dded4598b685e5d4b4b5d5c130cd744a068c286d3ac03928b24ba6823`.
+This did not change PATH, global PHPM or a business project. PHP payload hashes
+were checked by the pipeline; their signed catalog was additionally checked locally.
+
+Root authorization expires `2027-10-29T03:11:37Z`, client metadata expires
+`2026-11-28T03:55:50Z`. These operator-key signatures differ from earlier test
+rehearsals. No publishing-secret plaintext or local seed file was retrieved by
+the agent.
