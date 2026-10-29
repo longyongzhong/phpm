@@ -777,3 +777,25 @@ Root authorization expires `2027-10-29T03:11:37Z`, client metadata expires
 `2026-11-28T03:55:50Z`. These operator-key signatures differ from earlier test
 rehearsals. No publishing-secret plaintext or local seed file was retrieved by
 the agent.
+
+## Public candidate publication (2026-10-29)
+
+The operator explicitly approved public issuance. Immediately before publication,
+the client/catalog signatures were reverified against the pinned operator root;
+the draft's source, tag, complete asset set, sizes and SHA-256 digests matched the
+verified manifest. Existing tag references were checked before the state change.
+Release `427450758` became public at `2026-10-29T04:34:10Z`, retaining
+`prerelease: true` and not becoming the latest stable release:
+[PHPM v0.1.0-rc.1](https://github.com/longyongzhong/phpm/releases/tag/v0.1.0-rc.1).
+All 23 asset digests were rechecked afterward. An unauthenticated public API
+request independently confirmed `draft: false`, `prerelease: true` and 23 assets.
+Release notes were updated to state the supported platforms without changing assets.
+
+The operator's intended test server reports Debian 12/bookworm, x86_64. The Linux
+client is a CGO-disabled Go binary, while this release's PHP/Redis/SDK target is
+Debian 13/glibc 2.41; no Debian 12 signed PHP build is claimed. The public Linux
+client's signed-manifest SHA-256 is
+`0f3234b8096f4c73edc4603e6c7eda3d0a54fd01ea04ced6509a28dc9cae9ef8`.
+Client-only commands and the runtime-target distinction are documented in
+`docs/linux-test.zh-CN.md`. Actual execution on that Debian 12 server remains an
+operator-side test, not an outcome established by publication or cross-compilation.

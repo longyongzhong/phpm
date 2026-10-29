@@ -8,6 +8,10 @@ system PHP installation, global PATH or services.
 
 This is an initial **0.1.0-dev** implementation, not a production deployment tool.
 
+The first signed candidate [0.1.0-rc.1](https://github.com/longyongzhong/phpm/releases/tag/v0.1.0-rc.1)
+is available. See the [Linux testing guide](docs/linux-test.zh-CN.md) for downloads
+and the distinction between the Linux client and Debian-13-only PHP packages.
+
 ## Current scope
 
 | Capability | Windows x64 | Linux / macOS |
