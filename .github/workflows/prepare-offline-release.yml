@@ -1,0 +1,82 @@
+name: Prepare unsigned offline release materials
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Candidate client version (for example 0.1.0-rc.1)
+        type: string
+        required: true
+      base_run:
+        description: Successful stage-A PHP 8.4 build run ID
+        type: string
+        required: true
+      target_run:
+        description: Successful stage-A PHP 8.5 build run ID
+        type: string
+        required: true
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Fetch accepted source builds and record provenance
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE_RUN: ${{ inputs.base_run }}
+          TARGET_RUN: ${{ inputs.target_run }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, re, subprocess
+          from pathlib import Path
+          root = Path(os.environ['RUNNER_TEMP'])
+          repo = os.environ['GITHUB_REPOSITORY']
+          records = []
+          for role in ('base', 'target'):
+              run_id = os.environ[role.upper() + '_RUN']
+              if not re.fullmatch(r'[1-9][0-9]*', run_id):
+                  raise SystemExit('Invalid source run ID')
+              def api(path):
+                  return json.loads(subprocess.check_output(['gh', 'api', path], text=True))
+              run = api(f'repos/{repo}/actions/runs/{run_id}')
+              if run['conclusion'] != 'success' or run['path'] != '.github/workflows/debian-source-build.yml' or run['repository']['full_name'] != repo:
+                  raise SystemExit('Expected a successful same-repository stage-A build')
+              name = f"phpm-debian13-source-build-{run_id}-{run['run_attempt']}"
+              matches = [a for a in api(f'repos/{repo}/actions/runs/{run_id}/artifacts')['artifacts'] if a['name'] == name and not a['expired']]
+              if len(matches) != 1 or not re.fullmatch(r'sha256:[a-f0-9]{64}', matches[0].get('digest', '')):
+                  raise SystemExit('Accepted source artifact is missing, expired or ambiguous')
+              artifact = matches[0]
+              subprocess.run(['gh', 'run', 'download', run_id, '--repo', repo, '--name', name, '--dir', str(root / (role + '-packages'))], check=True)
+              records.append({'role': role, 'run_id': int(run_id), 'attempt': run['run_attempt'], 'commit': run['head_sha'],
+                              'artifact_id': artifact['id'], 'artifact_digest': artifact['digest']})
+          (root / 'provenance.json').write_text(json.dumps({'repository': repo, 'source_runs': records}, indent=2))
+          PY
+      - name: Validate helpers and release metadata
+        run: |
+          go test -count=1 ./internal/catalog ./internal/phpm
+          python3 scripts/test_install_phpm.py
+          python3 -m unittest discover -s build/release -p 'test_*.py'
+      - name: Build versioned clients and unsigned signing materials
+        env:
+          CANDIDATE_VERSION: ${{ inputs.version }}
+        run: python3 build/release/prepare.py --base "$RUNNER_TEMP/base-packages" --target "$RUNNER_TEMP/target-packages" --version "$CANDIDATE_VERSION" --repo "$GITHUB_REPOSITORY" --provenance "$RUNNER_TEMP/provenance.json" --output "$RUNNER_TEMP/offline-materials"
+      - name: Test shipped offline signer with disposable keys and install the real client
+        run: python3 build/release/roundtrip.py --materials "$RUNNER_TEMP/offline-materials"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: phpm-offline-signing-materials-${{ github.run_id }}
+          path: ${{ runner.temp }}/offline-materials/
+          if-no-files-found: error
+          retention-days: 14

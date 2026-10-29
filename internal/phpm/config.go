@@ -16,7 +16,8 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-const Version = "0.1.0-dev"
+// Release builds set Version with -ldflags -X; ordinary development builds retain this value.
+var Version = "0.1.0-dev"
 
 var (
 	versionPattern = regexp.MustCompile(`^\d+\.\d+(\.\d+)?$`)

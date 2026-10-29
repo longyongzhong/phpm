@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify a complete signed bundle, then upload its public assets to a PRIVATE draft only."""
+"""Verify a complete signed bundle, then upload its public assets to a draft only."""
 import argparse
 import hashlib
 import json
@@ -28,8 +28,8 @@ def main():
     result = json.loads(subprocess.check_output([str(args.verifier.resolve()), "verify", "--bundle", str(args.bundle.resolve()),
         "--root", str(args.root.resolve()), "--fingerprint", args.fingerprint], text=True))
     repo = json.loads(gh("api", "repos/" + args.repo))
-    if repo["full_name"].lower() != args.repo.lower() or repo.get("private") is not True:
-        raise ValueError("this rollout permits only a private repository; no visibility change is performed")
+    if repo["full_name"].lower() != args.repo.lower() or type(repo.get("private")) is not bool:
+        raise ValueError("repository identity/visibility could not be verified")
     commit = json.loads(gh("api", f"repos/{args.repo}/commits/{result['commit']}"))
     if commit["sha"] != result["commit"]:
         raise ValueError("signed source commit is not present in the target repository")
@@ -60,8 +60,8 @@ def main():
     local = {path.name: (path.stat().st_size, "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()) for path in assets}
     for remote in release["assets"]:
         if (remote["size"], remote.get("digest")) != local[remote["name"]]:
-            raise ValueError("uploaded asset size/digest mismatch; inspect the private draft")
-    print(json.dumps({"status": "private-draft-uploaded", "url": release["html_url"], "assets": len(assets)}))
+            raise ValueError("uploaded asset size/digest mismatch; inspect the draft")
+    print(json.dumps({"status": "draft-uploaded", "url": release["html_url"], "assets": len(assets), "repository_private": repo["private"]}))
 
 
 if __name__ == "__main__":

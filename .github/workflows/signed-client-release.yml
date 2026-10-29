@@ -12,7 +12,7 @@ on:
         type: string
         required: true
       draft_release:
-        description: Upload individual public assets to a private draft using TEST keys
+        description: Upload individual assets to an unpublished draft using TEST keys
         type: boolean
         default: false
 
@@ -79,7 +79,7 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - name: Verify downloaded bundle and upload private draft assets
+      - name: Verify downloaded bundle and upload draft assets
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash

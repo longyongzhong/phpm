@@ -386,6 +386,8 @@ Offline root authorization, publishing-key rotation/revocation, signed client
 installation and private draft release commands are documented in the
 [offline release guide](docs/offline-release.zh-CN.md). Formal private keys stay
 with the operator; CI rehearsals use disposable test keys only.
+For the build → operator offline signing → draft upload handoff, see the
+[release quickstart](docs/release-quickstart.zh-CN.md).
 
 See [CONTRIBUTING.md](CONTRIBUTING.md), [architecture](docs/architecture.md),
 [SECURITY.md](SECURITY.md) and [validation notes](docs/validation.md).

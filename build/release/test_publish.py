@@ -53,18 +53,18 @@ class PublisherTests(unittest.TestCase):
                          "--root", str(root / "root.pub"), "--fingerprint", "b" * 64, "--verifier", str(root / "verifier")]
             verified = json.dumps({"version": "0.1.0-test", "commit": "a" * 40})
             with patch.object(sys, "argv", arguments), patch.object(publisher, "gh", side_effect=gh), patch.object(publisher.subprocess, "check_output", return_value=verified):
-                if not private or existing or bad_digest:
+                if existing or bad_digest:
                     with self.assertRaises(ValueError):
                         publisher.main()
                 else:
                     publisher.main()
-            if not private or existing:
+            if existing:
                 self.assertFalse(any("--input" in r or r[:2] == ("release", "upload") for r in requests))
 
     def test_draft_by_id_and_exact_asset_digests(self):
         self.exercise()
 
-    def test_public_repository_refused_before_creation(self):
+    def test_public_repository_still_creates_only_a_draft(self):
         self.exercise(private=False)
 
     def test_existing_release_untouched(self):
