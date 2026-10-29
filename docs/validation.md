@@ -702,3 +702,42 @@ materials as `OFFLINE-GUIDE.md`. Formal signing remains pending operator action;
 only the resulting public assets and independently checked public root/fingerprint
 need to return to the connected publisher. Publishing the formal release remains
 a separate decision after draft review.
+
+## GitHub Environment publishing-key signing (2026-10-29)
+
+The user changed the routine signing preference to GitHub Actions. The root
+private key remains operator-held; the publishing seed is configured by the user
+as Environment Secret `PHPM_RELEASE_SEED`. No formal seed was generated/read by
+this work or sent through chat. Environment `phpm-release` was created and its
+custom deployment branch policy was read back as exactly branch `main`. Existing
+environment protection, if different, is preserved rather than silently weakened.
+Secret metadata confirmed the formal publishing secret is not yet configured.
+
+Commit `b10d13be211758f55885e6f37631549e60947e20` passed
+[all cross-platform CI jobs](https://github.com/longyongzhong/phpm/actions/runs/40809113466).
+The local native PHP/Composer/two-Redis regression passed (`internal/phpm` 22.107
+seconds), as did vet, two Go initialization-helper tests and twelve Python release
+tests (one Windows symlink fixture skipped locally and exercised on Linux CI).
+Tests cover public/private key mismatch and incomplete-pair preservation, refusing
+existing authorization outputs, keeping private/public directories separate,
+secret-file removal on failure, removing the secret from child environments,
+missing/invalid secrets, wrong source commit/repository/version and refusing
+publication before any GitHub mutation when signed identity differs.
+
+[Materials/signing run 40809196722](https://github.com/longyongzhong/phpm/actions/runs/40809196722)
+passed both existing offline and new GitHub environment-variable signing paths.
+The latter supplied only a disposable publishing seed to the real signing script,
+verified the root-authorized release, installed its real Linux client and observed
+version `0.1.0-rc.1`. Both test keypairs and the test signed bundle were temporary;
+no test private keys or formal private keys were uploaded. The exact build request
+hash for this run is `5a3a72e7ec9445ff49505aec68ca3dd4e0477e84e857c7d2b7b91ff1c2c04e63`.
+
+`GitHub signed release draft` composes the reusable checked-material workflow,
+an Environment-scoped read-only signing job, and a separate write-enabled draft
+upload job without the signing secret. It pins the requested version/source,
+uses the Actions run ID as the catalog sequence, refuses existing releases and
+does not publish automatically. Formal execution of this entire workflow remains
+pending the operator's one-time `phpm-release setup-github`, committing its four
+public authorization files, and entering the publishing Secret in GitHub. The
+published binary `bin/phpm-release.exe` was rebuilt locally with that initializer;
+the initializer was not run against the operator's actual key directory.
