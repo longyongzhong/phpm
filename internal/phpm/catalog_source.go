@@ -210,6 +210,9 @@ func (s *Store) fetchCatalog(ctx context.Context, name string, client *http.Clie
 	source, err := s.loadSource(name)
 	initial := errors.Is(err, os.ErrNotExist) && bootstrap != nil
 	if initial {
+		if _, statErr := os.Lstat(s.sourcePath(name)); !errors.Is(statErr, os.ErrNotExist) {
+			return source, c, errors.New("cannot initialize built-in source over an existing unreadable configuration")
+		}
 		source, err = *bootstrap, nil
 	}
 	if err != nil {

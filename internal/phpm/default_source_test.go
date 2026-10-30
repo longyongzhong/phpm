@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -162,5 +163,26 @@ func TestBuiltinNameAndInvalidProviderFlagsFailBeforeNetwork(t *testing.T) {
 	}
 	if err := c.preparePHPUpgrade([]string{"8.5", "--runtime", "fixture", "--provider", "staticphp"}); err == nil || !strings.Contains(err.Error(), "cannot be combined") {
 		t.Fatalf("accepted conflicting upgrade args: %v", err)
+	}
+}
+
+func TestBuiltinBootstrapDoesNotReplaceDanglingSourceLink(t *testing.T) {
+	s := testStore(t)
+	expected := builtinSource()
+	path := s.sourcePath(expected.Name)
+	target := filepath.Join(t.TempDir(), "not-created.json")
+	if err := os.Symlink(target, path); err != nil {
+		if runtime.GOOS == "windows" {
+			t.Skip("Windows symlink privilege is unavailable")
+		}
+		t.Fatal(err)
+	}
+	_, _, err := s.fetchCatalog(context.Background(), expected.Name, catalogClient(), &expected)
+	if err == nil || !strings.Contains(err.Error(), "existing unreadable") {
+		t.Fatalf("did not reject dangling source link before network: %v", err)
+	}
+	actual, err := os.Readlink(path)
+	if err != nil || actual != target {
+		t.Fatal("existing source link was overwritten", err)
 	}
 }
