@@ -901,3 +901,76 @@ is claimed from that check; the public API asset digests and earlier signed-clie
 build/bootstrap acceptance remain independently established. The guide's curl
 download supports resuming an interrupted local transfer before full SHA-256
 verification and extraction.
+
+## Linux default signed source (2026-10-30)
+
+The operator requested self-built signed downloads as the default. Source
+`426d72bcbb993a492d391aa52e2a84c17e4aae71` changes fresh Linux x64 availability/
+installation to the built-in `phpm` catalog with the reviewed public root pinned
+in the client. The initial catalog URL is immutable public rc.2, minimum sequence
+`40999599815`. Neither download-server public keys nor GitHub latest are implicitly
+trusted. Custom sources stay explicit, unsupported systems fail with an explicit
+StaticPHP/import alternative, and errors never trigger provider fallback.
+
+Bootstrap verifies root authorization and the catalog before first registration;
+existing sources retain authorization/revocation/sequence/digest history. A client
+minimum-sequence check does not invalidate an existing source file on failure.
+Reserved-name conflicts and dangling source links are rejected without replacing
+them. Existing signed/StaticPHP projects inherit their locked provider during
+upgrade; explicit `--source`/`--provider staticphp` selectors remain available.
+Windows keeps its official Windows provider.
+
+Local Go tests, native Windows PHP/Composer/two-Redis checks, vet, workflow/shell
+syntax checks and a standalone executable public-root consistency test passed.
+The first hosted run [41074506853](https://github.com/longyongzhong/phpm/actions/runs/41074506853)
+passed both new Debian default bootstraps and all three native OS jobs. Its legacy
+StaticPHP lifecycle also passed 8.4.27 -> 8.5.12 -> 8.4.27, but the subsequent
+standalone unit suite failed because its archive lacked the reviewed public-root
+fixture. The fix bundles that public fixture with SHA256SUMS and supplies its path
+only to the test binary. Assertions were retained; no production trust override
+environment variable was added.
+
+[CI 41075574189](https://github.com/longyongzhong/phpm/actions/runs/41075574189)
+then passed all six jobs on the final source:
+
+| Job | ID | Result |
+|---|---|---|
+| Ubuntu native tests/vet | 124130716545 | success |
+| Windows native tests/vet | 124130717310 | success |
+| macOS native tests/vet | 124130716998 | success |
+| Explicit StaticPHP bootstrap/native tests | 124130717117 | success |
+| Debian 12 signed default bootstrap | 124130716803 | success |
+| Debian 13 signed default bootstrap | 124130717025 | success |
+
+The signed default fixtures run as non-root in fresh Debian runtime containers
+with neither system PHP nor compiler. They do not register a source or supply
+`--source`: availability filters the host target, PHP/extension packages are
+downloaded from the actual public PHPM source and root-verified, XLSX data is
+written/read, Redis is loaded, frozen install succeeds, and PHP 8.4.27 -> 8.5.12
+candidate/activation/rollback restores exact YAML/lock bytes. This is container
+acceptance, not independent-kernel, business-project or production deployment
+acceptance.
+
+[Signed draft run 41076123490](https://github.com/longyongzhong/phpm/actions/runs/41076123490)
+passed configuration, four-input preparation including both disposable-key
+roundtrips, Environment signing and exact post-upload asset verification. It
+created draft prerelease `429159006`, version `0.1.0-rc.3`, source
+`426d72bcbb993a492d391aa52e2a84c17e4aae71`, with 39 assets. PHP/SDK/extension
+builds are reused from the previously accepted four rc.2 stage-A runs; client and
+catalog versions are independent. This draft has not been publicly issued.
+The intended tag `v0.1.0-rc.3` and release notes were normalized after checking
+existing tag references; the draft state, exact source and all 39 asset names,
+sizes and digests were independently rechecked afterward. The current review URL
+is [rc.3 draft](https://github.com/longyongzhong/phpm/releases/tag/untagged-bad36713f06b8b61261a).
+
+Downloaded rc.3 catalog/client metadata was independently verified against the
+repository-pinned public root and authorization, including all four build pairs,
+extension identities, asset bindings and exact version/source. Reviewed public
+trust files were supplied from the repository and their hashes were also checked
+against the signed client manifest. Catalog sequence is `41076123490`. The
+signed Linux client package SHA-256 is
+`07daa0913b4e15f05a0ec6ad54c898a19d01771e25dc587f94a4d4fa4c7f5170`.
+The Windows ZIP SHA-256 is
+`8c84ea192a26b0c803657ae9c3a0a8f944c228015544c0622482f96c1a6766b3`;
+its separate maintainer-side download encountered HTTPS timeouts and installation
+was not completed. No formal private seed bytes were read by the agent.

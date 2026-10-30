@@ -22,7 +22,8 @@ remain unchanged.
 Current source changes Linux defaults to the built-in signed PHPM source;
 [default-source instructions](docs/default-source.zh-CN.md) describe the pinned
 root/catalog, explicit StaticPHP option and upgrade compatibility. This requires
-a new client; published rc.2 retains its explicit-source behavior.
+a new client; the signed rc.3 draft is ready for review, and published rc.2
+retains its explicit-source behavior.
 
 ## Current scope
 
