@@ -799,3 +799,78 @@ client's signed-manifest SHA-256 is
 Client-only commands and the runtime-target distinction are documented in
 `docs/linux-test.zh-CN.md`. Actual execution on that Debian 12 server remains an
 operator-side test, not an outcome established by publication or cross-compilation.
+
+## Debian 12/13 precompiled extension milestone (2026-10-30)
+
+Source commit `60b912f41291a85ad30103741ff86a8218198f1f` adds separate Debian
+12/glibc 2.36 and Debian 13/glibc 2.41 targets, PHP 8.4.27/8.5.12 NTS, matching
+SDKs, Redis 6.3.0 and xlswriter 3.0.0 shared extension packages. Build selection
+filters the exact host target before version/revision selection; lock restoration
+and extension acquisition also reject a foreign target. Unsupported hosts retain
+explicit errors. The default Linux StaticPHP provider is unchanged.
+
+Local native Windows PHP/Composer/two-Redis tests, `go test -count=1 ./...`,
+`go vet ./...`, workflow parsing, all four recipe checks, and Python helpers
+passed. Linux helper tests: 17 cases, with the optional real-source signature
+fixture skipped locally; source signatures are independently verified in each
+real Linux build. Release helper tests: 13 cases, one Windows symlink fixture
+skipped. Hosted [CI 40998346057](https://github.com/longyongzhong/phpm/actions/runs/40998346057)
+passed Windows, macOS, Ubuntu native tests and Linux bootstrap.
+
+All four stage-A runs completed successfully:
+
+| Target | PHP | Run | Artifact | GitHub artifact SHA-256 |
+|---|---|---|---|---|
+| Debian 12 | 8.4.27 | [40998405450](https://github.com/longyongzhong/phpm/actions/runs/40998405450) | 12952483424 | `30768518568474769dbc2fdc10f0a58684f967eb23a5afe0fe92d417560e2dd3` |
+| Debian 12 | 8.5.12 | [40998411199](https://github.com/longyongzhong/phpm/actions/runs/40998411199) | 12951984235 | `6792f9acb5a2c16f1c65524b8c640f0def587ba02fe12b83195ac8240878a73a` |
+| Debian 13 | 8.4.27 | [40998417247](https://github.com/longyongzhong/phpm/actions/runs/40998417247) | 12952303794 | `ea50cdc336ba169b84ad92b0f445aa3f1cf687e5b90e18e059c23546d5a91af3` |
+| Debian 13 | 8.5.12 | [40998422582](https://github.com/longyongzhong/phpm/actions/runs/40998422582) | 12952229412 | `6e2a9cd63222af0d4a9cc69e607149211beab173407efe4618ede2857ccec05c` |
+
+The resulting build IDs are:
+
+- `php-8.4.27-debian12-x86_64-nts-b1-d48a002bfc37`
+- `php-8.5.12-debian12-x86_64-nts-b1-39bbdea941c4`
+- `php-8.4.27-debian13-x86_64-nts-b2-ca6a7e55648b`
+- `php-8.5.12-debian13-x86_64-nts-b2-8d33f2aacdc4`
+
+Each build exports only after 8 SDK, 20 fresh-runtime and 18 signed-distribution
+checks. These cover relocated SDK rebuilding/loading both extensions, xlswriter
+XLSX write/read, non-root CLI/FPM loading without host PHP/compiler, Redis server
+roundtrips, project isolation, Composer missing-extension installation, HTTPS
+signature/package download, tamper/replay/expiry refusal, exact-lock hydration,
+and same-version payload revision activation/rollback. Compilation, SDK rebuild,
+and runtime/distribution verification disallow external network. Licenses from
+xlswriter and bundled libxlsx/Expat are retained.
+
+[Formal signed draft run 40999599815](https://github.com/longyongzhong/phpm/actions/runs/40999599815)
+passed configuration, four-input preparation, disposable-key offline/GitHub
+signing roundtrips, Environment publisher signing, and post-upload verification.
+Release `428636173`, intended tag `v0.1.0-rc.2`, remains **draft prerelease**:
+[review draft](https://github.com/longyongzhong/phpm/releases/tag/untagged-9936c630bbe730508a93).
+At final metadata review its tag had changed to
+`untagged-9936c630bbe730508a93` while source and assets remained the same. No
+agent PATCH was made after that mismatch; restoring the intended tag and editing
+the draft notes are pending operator clarification to preserve possible UI edits.
+It has 39 assets: 37 signed-manifest files plus `clients.json` and its signature.
+Catalog sequence is `40999599815`, authorization version 1, using the same pinned
+operator root `b9aaa6269e68f95ea18147d09c043ca9c8ae332903e0bc04b23c34ad98e35d32`.
+No formal private seed bytes were read by the agent.
+
+Downloaded metadata was independently verified against the repository-pinned
+root: root authorization, catalog and client roles, exact version/source, all
+four target/version combinations, both extension identities and package bindings
+across manifests. The downloaded Windows ZIP was installed with the independent
+Python/OpenSSL bootstrap in an isolated directory; its executable reported
+`0.1.0-rc.2`. Windows package SHA-256:
+`383a3c1ff7c41b9fd037bcca6b9330650c86e68b09e5a25a5f2396b39428045c`.
+Signed Linux package SHA-256:
+`c3eacddf917a5c6f21403a1dbe45144c48896f005c56cb6b855916399365e57b`.
+
+This is container acceptance, not independent-kernel acceptance for the new
+matrix. Cross-version independent-VM acceptance previously established for the
+older Debian 13/Redis pair has not been repeated with these new packages.
+Operator Debian 12 server testing, business acceptance, sustained load and
+production service switching remain outstanding. Xdebug, other distributions/
+architectures, and automatic client-side compilation remain future work. rc.1
+assets were not changed. The rc.2 guide explicitly requires public issuance before
+anonymous download commands can be used.

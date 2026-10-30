@@ -1,5 +1,8 @@
 # Linux 测试：0.1.0-rc.1
 
+本文保留 rc.1 的测试范围。新增 Debian 12 与 xlswriter 的 rc.2 已完成签名草稿，
+尚未公开；见 [rc.2 测试指南](linux-test-rc2.zh-CN.md)，其中下载命令需公开后使用。
+
 [公开预发布版本](https://github.com/longyongzhong/phpm/releases/tag/v0.1.0-rc.1)。
 
 先区分两件事：Linux amd64 的 PHPM 客户端使用 `CGO_ENABLED=0` 的静态 Go 构建，可在 Debian 12 x86_64 上先试运行；本次自建的 PHP/Redis/SDK 包只支持 **Debian 13 x86_64、glibc 2.41、NTS**，不能直接用于 Debian 12。

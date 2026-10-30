@@ -14,8 +14,8 @@ and the distinction between the Linux client and Debian-13-only PHP packages.
 
 Current source adds separate Debian 12/13 recipes and precompiled xlswriter;
 see the [precompiled extension milestone](docs/precompiled-extensions.zh-CN.md).
-These additions require new native acceptance and a new release; they are not
-included in the published rc.1 assets.
+All four combinations passed native container acceptance and are included in the
+unpublished signed rc.2 draft; they are not included in published rc.1 assets.
 
 ## Current scope
 

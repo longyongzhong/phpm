@@ -8,6 +8,8 @@
 
 公开的 `v0.1.0-rc.1` 保持原有资产，只支持 Debian 13、Redis；新增组合必须通过真实构建验收，并以新版本发布后才能使用。源码能力不等于旧版安装包已经具备的能力。
 
+2026-10-30：四个组合均通过真实构建与容器验收，`0.1.0-rc.2` 正式密钥签名草稿已生成，尚未公开。运行与产物证据见 [验收记录](validation.md#debian-1213-precompiled-extension-milestone-2026-10-30)，公开后的测试步骤见 [rc.2 指南](linux-test-rc2.zh-CN.md)。
+
 默认 Linux 下载仍使用第三方 StaticPHP；此次没有自动注册或替换用户的来源。iStoreOS/OpenWrt、Ubuntu、ARM、macOS 尚未纳入自建预编译包范围。
 
 ## 构建与验收
