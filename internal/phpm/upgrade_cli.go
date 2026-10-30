@@ -11,17 +11,21 @@ func (c *CLI) preparePHPUpgrade(args []string) error {
 	set := flag.NewFlagSet("php upgrade", flag.ContinueOnError)
 	runtimeID := set.String("runtime", "", "use a locally imported target build")
 	source := set.String("source", "", "use a registered signed catalog")
+	providerName := set.String("provider", "", "explicit community provider: staticphp")
 	pos, err := parseFlags(set, args)
 	if err != nil {
 		return err
 	}
 	if len(pos) > 1 {
-		return errors.New("usage: phpm php upgrade [VERSION] [--runtime ID | --source NAME]")
+		return errors.New("usage: phpm php upgrade [VERSION] [--runtime ID | --source NAME | --provider staticphp]")
 	}
-	if *source != "" && *runtimeID != "" {
-		return errors.New("--source and --runtime cannot be combined")
+	if (*source != "" && *runtimeID != "") || (*providerName != "" && (*source != "" || *runtimeID != "")) {
+		return errors.New("--source, --runtime and --provider cannot be combined")
 	}
-	request := runtimeUpgradeRequest{RuntimeID: *runtimeID, Source: *source}
+	if *providerName != "" && *providerName != "staticphp" {
+		return errors.New("unknown provider; use --provider staticphp")
+	}
+	request := runtimeUpgradeRequest{RuntimeID: *runtimeID, Source: *source, Provider: *providerName}
 	if len(pos) == 1 {
 		request.Version = pos[0]
 	}

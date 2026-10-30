@@ -77,3 +77,50 @@ jobs:
           printf '%s\n' '7a2d379d5b8ffdaa028580ef26494c36d2feef4b178d3dd1473a4dbc5e17c8d6  fixtures/composer.phar' | sha256sum -c -
           sha256sum phpm phpm.test run-tests.sh fixtures/composer.phar > SHA256SUMS
           sh run-tests.sh --bootstrap
+
+  signed-default-bootstrap:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        debian: ['12', '13']
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Build client and prepare matching fresh Debian runtime
+        id: context
+        env:
+          DEBIAN_VERSION: ${{ matrix.debian }}
+          CGO_ENABLED: '0'
+          GOAMD64: v1
+        run: |
+          go build -trimpath -o "$RUNNER_TEMP/phpm" ./cmd/phpm
+          python3 - <<'PY'
+          import os, shutil, sys
+          from pathlib import Path
+          sys.path.insert(0, 'build/linux')
+          from common import load_recipe, recipe_filename
+          debian = os.environ['DEBIAN_VERSION']
+          recipe = load_recipe(Path('build/linux'), recipe_filename('8.4', debian))
+          context = Path(os.environ['RUNNER_TEMP']) / 'signed-default-context'
+          context.mkdir()
+          for source, name in [('build/linux/default-source.Dockerfile', 'Dockerfile'),
+              ('build/linux/runtime-packages.txt', 'runtime-packages.txt'),
+              ('build/linux/runtime-packages-debian12.txt', 'runtime-packages-debian12.txt'),
+              ('scripts/test-default-source.sh', 'test-default-source.sh'),
+              (str(Path(os.environ['RUNNER_TEMP']) / 'phpm'), 'phpm')]:
+              shutil.copyfile(source, context / name)
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write('base_image=' + recipe['base_image'] + '\n')
+          PY
+      - name: Install from signed defaults and test extensions, upgrade and rollback
+        env:
+          BASE_IMAGE: ${{ steps.context.outputs.base_image }}
+          DEBIAN_VERSION: ${{ matrix.debian }}
+        run: |
+          docker build --platform linux/amd64 --build-arg "BASE_IMAGE=$BASE_IMAGE" --build-arg "DEBIAN_VERSION=$DEBIAN_VERSION" -t phpm-default-test "$RUNNER_TEMP/signed-default-context"
+          docker run --rm --cap-drop ALL --security-opt no-new-privileges -e "PHPM_EXPECTED_TARGET=debian${DEBIAN_VERSION}-x86_64-nts" phpm-default-test

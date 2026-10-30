@@ -66,6 +66,9 @@ func (c *CLI) replaceSourceRoot(args []string) error {
 	if err != nil {
 		return err
 	}
+	if len(pos) == 1 && pos[0] == defaultSourceName {
+		return errors.New("the built-in PHPM root cannot be replaced with this command; register a separately named source for an explicit root change")
+	}
 	if len(pos) != 1 || !sourceName.MatchString(pos[0]) || *rootFile == "" || !validSHA(*oldFingerprint) || !validSHA(*newFingerprint) || *oldFingerprint == *newFingerprint {
 		return errors.New("source replace-root requires NAME, --root, --old-fingerprint and --new-fingerprint")
 	}

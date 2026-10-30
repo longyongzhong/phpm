@@ -5,7 +5,8 @@
 Debian 13；新增组合需要新的真实构建验收，不包含在已发布 rc.1 中。
 
 此目录是 PHP/Redis 构建验证入口，不是已发布的生产下载源。客户端当前的
-`php install` 行为不变，Linux 默认来源仍是实验性的 StaticPHP。
+Linux 默认来源在当前源码中已改为自建签名源，StaticPHP 需显式选择；
+已发布 rc.2 的行为不变，详见 [默认来源说明](../../docs/default-source.zh-CN.md)。
 
 ## 当前目标
 

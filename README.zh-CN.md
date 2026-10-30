@@ -4,7 +4,9 @@ Linux 官方源码构建已在 GitHub Actions 完成首次验证，面向 Debian
 通过 SDK 迁移重编译、运行时、扩展和 FPM 检查。
 操作和范围见 [构建说明](build/linux/README.zh-CN.md)。阶段 B 另提供显式可信源安装、
 签名目录和锁文件精确恢复，见 [分发与安装](docs/distribution.zh-CN.md)。
-默认下载源保持不变；正式签名候选版 rc.1 已公开，生产服务部署尚未自动化。
+当前源码将 Linux 默认来源改为内置根公钥验证的 PHPM 自建签名源，
+使用方式见 [默认来源说明](docs/default-source.zh-CN.md)。此变更需要新版客户端；
+已发布 rc.2 仍使用原来的显式注册流程。生产服务部署尚未自动化。
 Debian 12/13 预编译包和 xlswriter 已纳入公开候选版 rc.2，范围见
 [预编译扩展说明](docs/precompiled-extensions.zh-CN.md)，安装步骤见
 [Debian 12/13 测试指南](docs/linux-test-rc2.zh-CN.md)。
@@ -22,9 +24,8 @@ PHPM 为每个项目生成独立的 PHP CLI 环境，跨项目共享 PHP 构建�
 
 - Go CLI，不依赖预装 PHP 即可启动。
 - Windows x64 官方 PHP 下载、TS/NTS 选择、官方 SHA-256 校验及下载缓存。
-- Linux x64 从 StaticPHP 社区获取静态 NTS PHP，校验发布摘要和 ELF，无需预装 PHP/Go 或系统级包安装。
-- Debian 13 x64 可显式注册 Ed25519 公钥和签名目录，通过 `php install --source 名称`
-  安装构建包；支持匹配的 Redis、候选升级及 `install --frozen --source 名称` 精确恢复。
+- Debian 12/13 x64 默认从 PHPM 签名源下载，内置可信根公钥，无需手工注册；支持匹配的 Redis/xlswriter、候选升级和锁文件恢复。
+- Linux x64 可显式用 `--provider staticphp` 获取静态 NTS PHP，校验发布摘要和 ELF。
 - 将本地 PHP 分发目录复制到独立存储，记录版本、PHP API、构建信息和文件摘要。
 - 导入本地 DLL/SO，区分普通扩展和 Zend 扩展，启动 PHP 验证名称与精确版本。
 - `ext install` 从官方 Windows 扩展目录在线安装，自动匹配 PHP/TS/NTS/工具链/x64，并更新项目配置和锁文件。
@@ -86,17 +87,29 @@ phpm php import /opt/portable-php --binary bin/php
 
 ## Linux x64 从零安装
 
-Linux x64（包括待实测的 iStoreOS/OpenWrt）使用同样的命令：
+Debian 12/13 x64 准备好 [系统运行库](docs/linux-test-rc2.zh-CN.md#准备系统运行库)后使用同样的命令：
 
 ```sh
 phpm php available
 phpm init --php 8.4
 phpm php install 8.4
 phpm install
+phpm ext install xlswriter
+phpm ext install redis
 phpm exec -- php -v
 ```
 
-无需系统预装 PHP、Go、curl 或 tar。下载与解包由 PHPM 完成，安装只写入
+首次访问会验证客户端固定的根公钥、授权、目录和包摘要。完整规则见
+[默认来源说明](docs/default-source.zh-CN.md)，已发布 rc.2 的显式注册流程保持不变。
+
+其他 Linux x64（例如 iStoreOS/OpenWrt）若要尝试社区静态构建，需显式选择：
+
+```sh
+phpm php available --provider staticphp
+phpm php install 8.4 --provider staticphp
+```
+
+选择 StaticPHP 时无需系统预装 PHP、Go、curl 或 tar。下载与解包由 PHPM 完成，安装只写入
 `PHPM_HOME`，不执行 `opkg`/`apt` 或远程安装脚本。目标仓库需要有写入和执行权限，
 网络需要能验证 HTTPS 证书并访问 StaticPHP 的资源站。
 
@@ -293,8 +306,8 @@ phpm verify --candidate
 phpm exec --candidate -- php -v
 ```
 
-默认查找当前 PHP 次版本分支的最新可用构建（Windows 官方构建或 Linux x64
-StaticPHP 构建），保留 TS/NTS、调试模式与平台。也可以 `phpm php upgrade 8.4`
+默认查找当前 PHP 次版本分支的最新可用构建，已有签名源/StaticPHP 项目沿用原来源，
+保留 TS/NTS、调试模式与平台。也可以 `phpm php upgrade 8.4`
 显式指定目标分支/精确版本。
 准备阶段不修改项目的 `phpm.yaml` 和 `phpm.lock`，普通 `exec` 仍用旧环境；
 第三方扩展保留声明的版本，为新 PHP 重新准备，自带模块则跟随新运行时。

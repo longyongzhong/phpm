@@ -38,7 +38,7 @@ if [ "$mode" = --bootstrap ]; then
     mkdir "$run_dir/project"
     cd "$run_dir/project"
     "$PHPM_TEST_CLI_BINARY" init --php 8.4
-    "$PHPM_TEST_CLI_BINARY" php install 8.4
+    "$PHPM_TEST_CLI_BINARY" php install 8.4 --provider staticphp
     "$PHPM_TEST_CLI_BINARY" install
     "$PHPM_TEST_CLI_BINARY" ext install json
     php_binary=$("$PHPM_TEST_CLI_BINARY" exec -- php -r 'echo PHP_BINARY;')
@@ -60,7 +60,7 @@ if [ "$mode" = --bootstrap ]; then
     fi
     before_version=$("$PHPM_TEST_CLI_BINARY" exec -- php -r 'echo PHP_VERSION;')
     sha256sum phpm.yaml phpm.lock > "$run_dir/before-upgrade.sha256"
-    "$PHPM_TEST_CLI_BINARY" php upgrade 8.5
+    "$PHPM_TEST_CLI_BINARY" php upgrade 8.5 --provider staticphp
     "$PHPM_TEST_CLI_BINARY" diff
     "$PHPM_TEST_CLI_BINARY" verify --candidate
     "$PHPM_TEST_CLI_BINARY" exec --candidate -- php -v

@@ -19,21 +19,26 @@ All four combinations passed native container acceptance and are included in
 Use the [Debian 12/13 testing guide](docs/linux-test-rc2.zh-CN.md); rc.1 assets
 remain unchanged.
 
+Current source changes Linux defaults to the built-in signed PHPM source;
+[default-source instructions](docs/default-source.zh-CN.md) describe the pinned
+root/catalog, explicit StaticPHP option and upgrade compatibility. This requires
+a new client; published rc.2 retains its explicit-source behavior.
+
 ## Current scope
 
 | Capability | Windows x64 | Linux / macOS |
 |---|---|---|
 | Copy/import a local PHP distribution | Implemented | Implemented; requires a relocatable, symlink-free package |
 | Official PHP download + SHA-256 verification | Implemented | Not implemented |
-| StaticPHP community static PHP download + published SHA-256 | Not used | Linux x64 NTS common preset; other architectures/macOS use imports |
+| StaticPHP community static PHP download + published SHA-256 | Not used | Explicit `--provider staticphp` on Linux x64 NTS |
 | Import and probe local dynamic extensions | DLL | SO; requires compatible host libraries |
 | `ext install`: online extension installation | Official PECL Windows x64 archives | Bundled modules; matching extensions from signed Debian 12/13 catalogs (published rc.1: Debian 13 Redis) |
 | Project YAML, platform lock, immutable environment | Implemented | Implemented |
 | Execute with independent PHP configuration | Implemented | Implemented; Unix launcher uses process replacement |
 | Run Composer with project PHP; inspect declared platform requirements | Implemented; requires compatible Composer 2 PHAR for checks | Implemented; same requirement |
 | Automated PHP/extension source builds or PIE integration | Not implemented | Debian 12/13 x64 build workflow; client-side compilation/PIE not implemented |
-| Signed catalog install and exact locked artifact restoration | Not used | Opt-in Debian 12/13 x64 NTS targets; explicit public-key trust |
-| Prepare/test/activate/rollback project PHP upgrades | Implemented | Linux x64 StaticPHP downloads or preimported runtimes; compatible cached/bundled extensions |
+| Signed catalog install and exact locked artifact restoration | Not used | Default Debian 12/13 x64 NTS targets with a client-pinned root; custom sources remain explicit |
+| Prepare/test/activate/rollback project PHP upgrades | Implemented | Signed catalogs, explicit StaticPHP or preimported runtimes; upgrades preserve the current provider |
 | FPM, service restart, production deployment, garbage collection | Not implemented | Not implemented |
 
 Native integration tests and Go vet passed on hosted Windows, macOS and Ubuntu;
@@ -47,12 +52,13 @@ The [first successful source build](https://github.com/longyongzhong/phpm/action
 passed SDK relocation/rebuilding and fresh-container runtime/FPM checks on Debian
 13 x64. See the [source-build guide](build/linux/README.zh-CN.md) for its scope.
 
-The opt-in signed provider adds `source add/list`, `php install --source NAME`,
-matching Redis acquisition, source-preserving upgrade candidates and
+The signed provider adds `source add/list`, custom `php install --source NAME`,
+matching extension acquisition, source-preserving upgrade candidates and
 `install --frozen --source NAME` for exact artifact restoration. See the
 [distribution guide](docs/distribution.zh-CN.md) for key trust, offline signing,
-the private draft workflow and current production limitations. Default Linux
-downloads still use StaticPHP; no production signing key is bundled.
+the draft workflow and current production limitations. Default Linux downloads
+use PHPM's signed source with an embedded public root; no publishing private key
+is bundled. StaticPHP requires explicit selection.
 
 The [stage-C VM acceptance](build/linux/vm/README.zh-CN.md) passed a real
 8.4.27 -> 8.5.12 -> 8.4.27 lifecycle in an independent Debian kernel, including
@@ -88,7 +94,10 @@ phpm exec -- php --ini
 phpm verify
 ```
 
-Linux x64 can use the same install commands. Its provider downloads the community
+Debian 12/13 x64 uses the same install commands with PHPM's built-in signed
+catalog; root authorization and package hashes are verified without manual source
+registration. Install the documented system runtime libraries separately.
+Other Linux x64 systems can explicitly select `--provider staticphp` to use the community
 [StaticPHP common preset](https://dl.static-php.dev/v3/php-bin/common/), with
 published SHA-256, static ELF/architecture checks and actual PHP identity probes.
 No preinstalled PHP, Go, curl, tar or system package-manager operation is required.
@@ -97,7 +106,7 @@ This is a third-party distribution, not an official PHP Linux binary. Only build
 with published checksum files are listed/selected. NTS only; `--ts` is rejected.
 It statically includes a fixed module set (including PDO MySQL, OpenSSL, mbstring
 and Redis); these modules cannot have their versions switched independently, and
-follow the runtime during upgrades. Linux source builds/online extension builds
+follow the runtime during upgrades. Client-side source/extension builds
 remain unavailable. Host validation is reported separately in the validation notes.
 
 On macOS/other architectures, or to choose another build, import a separately

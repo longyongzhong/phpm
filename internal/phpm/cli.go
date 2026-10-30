@@ -24,8 +24,11 @@ Usage: phpm [--home DIRECTORY] COMMAND
 
   init --php 8.4                    Create phpm.yaml in the current directory
   php list                         List imported PHP builds
-  php available                    Query the platform's checksummed PHP catalog
-  php install 8.4 [--ts]            Download PHP (Windows x64 / Linux x64 static NTS)
+  php available                    Query PHP builds (Linux: built-in signed PHPM source)
+  php install 8.4 [--ts]            Download PHP (Windows official / Debian signed NTS)
+  php available --provider staticphp
+  php install 8.4 --provider staticphp
+                                   Explicitly use community Linux x64 static PHP
   source add NAME --catalog FILE_OR_HTTPS_URL --key PUBLIC_KEY_FILE
                                    Register an explicitly trusted signed source
   source add NAME --catalog FILE_OR_HTTPS_URL --root ROOT_PUBLIC_KEY --fingerprint SHA256
@@ -36,10 +39,10 @@ Usage: phpm [--home DIRECTORY] COMMAND
   source list                      List source locations and pinned key fingerprints
   php available --source NAME       List a registered signed catalog
   php install VERSION --source NAME
-                                   Install signed Debian 13 x64 packages
+                                   Install signed Debian 12/13 x64 packages
   php import DIRECTORY [--binary bin/php]
                                    Copy a self-contained local PHP distribution
-  php upgrade [VERSION] [--runtime ID | --source NAME]
+  php upgrade [VERSION] [--runtime ID | --source NAME | --provider staticphp]
                                    Prepare a verified candidate; keep current PHP
   ext list                         List imported extension builds
   ext check [--no-dev] [--candidate] [--json] [--lock]
@@ -67,12 +70,16 @@ Usage: phpm [--home DIRECTORY] COMMAND
   version                          Print PHPM version
 
 ext install updates phpm.yaml and phpm.lock after verification. ext import only
-populates the store. Online downloads currently support official Windows x64 PECL
-archives; runtime-bundled modules can also be enabled. No system PHP is changed.
+populates the store. Online downloads support official Windows x64 PECL archives
+and matching signed Debian catalog packages; bundled modules can also be enabled.
+No system PHP is changed.
 Activation/rollback affect future launches only; service restarts stay manual.
-Linux downloads use the community StaticPHP common preset with built-in modules.
-Explicit --source uses a registered signed catalog; Debian 12/13 x64 NTS targets.
-Linux/macOS automatic compilation, PIE integration, FPM and deployment are not
+Linux downloads default to PHPM's signed Debian 12/13 x64 NTS catalog, verified
+with the root public key pinned in this client; no source registration is needed.
+Use --provider staticphp for the community static common preset explicitly.
+--source NAME selects a separately registered signed catalog. Downloads never
+fall back to another provider on signature, compatibility or network errors.
+Linux/macOS automatic compilation, PIE integration, FPM service management and deployment are not
 implemented in this development release. See README.md for the support matrix.
 `
 
@@ -304,6 +311,7 @@ func (c *CLI) php(args []string) error {
 	case "available":
 		set := flag.NewFlagSet("php available", flag.ContinueOnError)
 		source := set.String("source", "", "registered signed catalog")
+		provider := set.String("provider", "", "explicit community provider: staticphp")
 		pos, err := parseFlags(set, args[1:])
 		if err != nil {
 			return err
@@ -311,23 +319,39 @@ func (c *CLI) php(args []string) error {
 		if len(pos) != 0 {
 			return errors.New("php available does not accept positional arguments")
 		}
+		selected, static, err := sourceSelection(runtime.GOOS, runtime.GOARCH, *source, *provider)
+		if err != nil {
+			return err
+		}
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
-		if *source != "" {
-			_, index, err := c.Store.fetchSourceCatalog(ctx, *source, catalogClient())
+		if selected != "" {
+			target := ""
+			if *source == "" {
+				target, err = debianHostTarget()
+				if err != nil {
+					return err
+				}
+			}
+			_, index, err := c.Store.fetchSourceCatalog(ctx, selected, catalogClient())
 			if err != nil {
 				return err
 			}
-			fmt.Fprintf(c.Out, "Signed catalog %s sequence %d (target compatibility checked at install):\n", *source, index.Sequence)
+			fmt.Fprintf(c.Out, "Signed catalog %s sequence %d (target compatibility checked at install):\n", selected, index.Sequence)
+			count := 0
 			for _, build := range index.Builds {
+				if target != "" && build.Target != target {
+					continue
+				}
+				count++
 				fmt.Fprintf(c.Out, "%s  revision %d  %s  %s\n", build.Version, build.Revision, build.Target, build.ID)
+			}
+			if count == 0 {
+				return fmt.Errorf("signed catalog has no packages for %s", target)
 			}
 			return nil
 		}
-		if runtime.GOOS == "linux" {
-			if runtime.GOARCH != "amd64" {
-				return errors.New("automatic Linux PHP downloads currently support x86_64")
-			}
+		if static {
 			releases, err := (linuxRuntimeProvider{Client: staticPHPClient()}).catalog(ctx)
 			if err != nil {
 				return err
@@ -356,29 +380,26 @@ func (c *CLI) php(args []string) error {
 		set := flag.NewFlagSet("php install", flag.ContinueOnError)
 		ts := set.Bool("ts", false, "thread-safe build")
 		source := set.String("source", "", "registered signed catalog")
+		provider := set.String("provider", "", "explicit community provider: staticphp")
 		pos, err := parseFlags(set, args[1:])
 		if err != nil {
 			return err
 		}
 		if len(pos) != 1 {
-			return errors.New("usage: phpm php install VERSION [--ts] [--source NAME]")
+			return errors.New("usage: phpm php install VERSION [--ts] [--source NAME | --provider staticphp]")
 		}
-		if *source != "" {
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
-			defer cancel()
-			rt, err := c.Store.installCatalogRuntime(ctx, *source, pos[0], *ts, c.Out)
-			if err != nil {
-				return err
-			}
-			fmt.Fprintln(c.Out, "Installed:", formatRuntime(rt))
-			return nil
+		selected, static, err := sourceSelection(runtime.GOOS, runtime.GOARCH, *source, *provider)
+		if err != nil {
+			return err
 		}
-		if runtime.GOOS == "linux" {
+		if selected != "" {
+			fmt.Fprintf(c.Out, "Fetching verified signed PHP packages from %s...\n", selected)
+		} else if static {
 			fmt.Fprintln(c.Out, "Fetching StaticPHP community static Linux x64 NTS build and published SHA-256; common extensions are built in...")
 		} else {
 			fmt.Fprintln(c.Out, "Fetching official catalog and checksum-verified PHP archive...")
 		}
-		rt, err := c.Store.installRuntime(pos[0], *ts, c.Out)
+		rt, err := c.Store.installRuntimeFrom(pos[0], *ts, *source, *provider, c.Out)
 		if err != nil {
 			return err
 		}

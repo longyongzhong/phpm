@@ -23,7 +23,8 @@ import (
 	"phpm/internal/catalog"
 )
 
-// A source is an explicit user trust decision, never inferred from a download.
+// Custom sources require an explicit user trust decision. The built-in source
+// uses the root pinned in the client, never a root inferred from a download.
 type catalogSource struct {
 	Schema       int      `json:"schema"`
 	Name         string   `json:"name"`
@@ -185,6 +186,18 @@ func verifiedSourceCatalog(ctx context.Context, source catalogSource, client *ht
 }
 
 func (s *Store) fetchSourceCatalog(ctx context.Context, name string, client *http.Client) (catalogSource, catalog.Catalog, error) {
+	if name == defaultSourceName {
+		expected := builtinSource()
+		key, err := catalog.PublicKey([]byte(expected.PublicKey))
+		if err != nil || catalog.Fingerprint(key) != defaultRootFingerprint {
+			return catalogSource{}, catalog.Catalog{}, errors.New("invalid built-in PHPM root fingerprint")
+		}
+		return s.fetchCatalog(ctx, name, client, &expected)
+	}
+	return s.fetchCatalog(ctx, name, client, nil)
+}
+
+func (s *Store) fetchCatalog(ctx context.Context, name string, client *http.Client, bootstrap *catalogSource) (catalogSource, catalog.Catalog, error) {
 	var c catalog.Catalog
 	if !sourceName.MatchString(name) {
 		return catalogSource{}, c, errors.New("invalid source name")
@@ -195,8 +208,18 @@ func (s *Store) fetchSourceCatalog(ctx context.Context, name string, client *htt
 	}
 	defer unlock()
 	source, err := s.loadSource(name)
+	initial := errors.Is(err, os.ErrNotExist) && bootstrap != nil
+	if initial {
+		source, err = *bootstrap, nil
+	}
 	if err != nil {
 		return source, c, err
+	}
+	if bootstrap != nil {
+		if err := validateBuiltinPin(source, *bootstrap); err != nil {
+			return source, c, err
+		}
+		source.Location = bootstrap.Location
 	}
 	var trust *catalog.Trust
 	if source.TrustMode == catalog.RootMode {
@@ -208,13 +231,18 @@ func (s *Store) fetchSourceCatalog(ctx context.Context, name string, client *htt
 		trust = &authorization
 		// Remember revocations even if the accompanying catalog is stale,
 		// unavailable or still signed by the newly revoked publisher.
-		if err := writeJSON(s.sourcePath(name), source); err != nil {
-			return source, c, err
+		if !initial {
+			if err := writeJSON(s.sourcePath(name), source); err != nil {
+				return source, c, err
+			}
 		}
 	}
 	c, digest, err := verifiedSourceCatalog(ctx, source, client, trust)
 	if err != nil {
 		return source, c, err
+	}
+	if bootstrap != nil && c.Sequence < bootstrap.Sequence {
+		return source, c, errors.New("built-in catalog is older than the minimum sequence pinned by this client")
 	}
 	source.Sequence, source.Digest = c.Sequence, digest
 	return source, c, writeJSON(s.sourcePath(name), source)
@@ -235,6 +263,9 @@ func (c *CLI) sourceCommand(args []string) error {
 		return nil
 	}
 	if len(args) == 1 && args[0] == "list" {
+		if runtime.GOOS == "linux" {
+			fmt.Fprintf(c.Out, "Default: %s (built-in signed PHPM source, root-sha256:%s)\n", defaultSourceName, defaultRootFingerprint)
+		}
 		entries, err := os.ReadDir(filepath.Join(c.Store.Home, "sources"))
 		if err != nil {
 			return err
@@ -272,6 +303,9 @@ func (c *CLI) sourceCommand(args []string) error {
 		return errors.New("source add requires NAME, --catalog and exactly one of --key or --root")
 	}
 	name := pos[0]
+	if name == defaultSourceName {
+		return errors.New("phpm is the built-in signed source; use source verify phpm to initialize it, or choose another name for a custom source")
+	}
 	locationValue, err := normalizeCatalogLocation(*location)
 	if err != nil {
 		return err
@@ -351,7 +385,7 @@ func catalogHostTarget(goos, arch string, release []byte, libc string) (string, 
 			return catalog.Target, nil
 		}
 	}
-	return "", errors.New("signed PHP packages require Debian 12 x86_64 (glibc 2.36) or Debian 13 x86_64 (glibc 2.41); OpenWrt/iStoreOS and other distributions are not supported")
+	return "", errors.New("signed PHP packages require Debian 12 x86_64 (glibc 2.36) or Debian 13 x86_64 (glibc 2.41); use --provider staticphp explicitly for community Linux x64 builds, or php import")
 }
 
 func checkDebianHost() error {

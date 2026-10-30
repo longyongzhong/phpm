@@ -10,7 +10,7 @@
 
 2026-10-30：四个组合均通过真实构建与容器验收，正式密钥签名的 [0.1.0-rc.2](https://github.com/longyongzhong/phpm/releases/tag/v0.1.0-rc.2) 已公开为预发布版本。运行与产物证据见 [验收记录](validation.md#debian-1213-precompiled-extension-milestone-2026-10-30)，测试步骤见 [rc.2 指南](linux-test-rc2.zh-CN.md)。
 
-默认 Linux 下载仍使用第三方 StaticPHP；此次没有自动注册或替换用户的来源。iStoreOS/OpenWrt、Ubuntu、ARM、macOS 尚未纳入自建预编译包范围。
+已发布 rc.2 的默认 Linux 下载仍使用第三方 StaticPHP。当前源码已改为默认自建签名源，需新版客户端，见 [默认来源说明](default-source.zh-CN.md)。iStoreOS/OpenWrt、Ubuntu、ARM、macOS 尚未纳入自建预编译包范围。
 
 ## 构建与验收
 

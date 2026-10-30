@@ -30,8 +30,21 @@ type UpgradePlan struct {
 	Environment  LockedEnvironment `json:"environment"`
 }
 
-type runtimeUpgradeRequest struct{ Version, RuntimeID, Source string }
+type runtimeUpgradeRequest struct{ Version, RuntimeID, Source, Provider string }
 type runtimeAcquire func(context.Context, Runtime, runtimeUpgradeRequest) (Runtime, error)
+
+func upgradeSource(current Runtime, request runtimeUpgradeRequest) (string, string) {
+	if request.Source != "" || request.Provider != "" {
+		return request.Source, request.Provider
+	}
+	if current.Source.Kind == "signed-catalog" {
+		return current.Source.Catalog, ""
+	}
+	if current.Source.Kind == "staticphp-linux" {
+		return "", "staticphp"
+	}
+	return "", ""
+}
 
 func projectIdentity(root string) string {
 	root = filepath.Clean(root)
@@ -69,9 +82,9 @@ func (s *Store) acquireUpgradeRuntime(ctx context.Context, current Runtime, requ
 		parts := strings.Split(current.PHP.Version, ".")
 		version = strings.Join(parts[:2], ".")
 	}
-	source := request.Source
-	if source == "" && current.Source.Kind == "signed-catalog" {
-		source = current.Source.Catalog
+	source, provider := upgradeSource(current, request)
+	if provider != "" {
+		return s.installRuntimeFrom(version, current.PHP.ZTS, source, provider, nil)
 	}
 	if source != "" {
 		return s.installCatalogRuntime(ctx, source, version, current.PHP.ZTS, nil)
@@ -107,6 +120,9 @@ func comparePHPVersions(a, b string) (int, error) {
 // immutable store, then the complete proposed environment is validated.
 func (s *Store) prepareUpgrade(root string, request runtimeUpgradeRequest, acquireRuntime runtimeAcquire, acquireExtension extensionAcquire) (UpgradePlan, error) {
 	var plan UpgradePlan
+	if request.Provider != "" && (request.Provider != "staticphp" || request.RuntimeID != "" || request.Source != "") {
+		return plan, errors.New("invalid provider or conflicting upgrade selectors")
+	}
 	if request.Version != "" && !versionPattern.MatchString(request.Version) {
 		return plan, errors.New("target PHP must be major.minor or major.minor.patch")
 	}

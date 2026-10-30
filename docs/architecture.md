@@ -15,12 +15,14 @@ Scope: the 0.1.0-dev CLI implementation, not a promise of complete platform supp
   snapshot guards, explicit project activation and retained rollback checkpoints.
 - `environment.go`: platform locks, selection, staged INI environments, actual-load checks.
 - `download.go`: official Windows release adapter, checksummed cache, safe ZIP extraction.
-- `runtime_download.go` / `linux_download.go`: OS dispatch and the StaticPHP Linux x64 NTS common provider; published-checksum catalog, restricted redirects and static ELF validation.
+- `default_source.go` / `runtime_download.go`: OS/provider dispatch, built-in PHPM catalog and public-root pins; default Debian signed downloads and explicit StaticPHP selection.
+- `linux_download.go`: explicit StaticPHP Linux x64 NTS common provider; published-checksum catalog, restricted redirects and static ELF validation.
 - `archive_tar.go`: bounded gzip/TAR extraction with trailer verification and no links/special files or overwrites.
 - `linux_transfer.go`: bounded HTTP range chunks, interrupted-transfer continuation, final publisher SHA-256 and verified cache commit.
 - `catalog_source.go` / `internal/catalog`: explicitly pinned Ed25519 sources,
   catalog expiry/sequence checks, Debian host gating, signed runtime/extension
-  acquisition and exact-lock hydration. No automatic trust-root bootstrapping.
+  acquisition and exact-lock hydration. The built-in source bootstraps only with
+  the client-pinned public root; custom sources require explicit registration.
 - `cli.go`: CLI dispatch and user-visible scope.
 - `platform_*.go`: file replacement and process execution behavior.
 
