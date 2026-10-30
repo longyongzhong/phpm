@@ -30,6 +30,9 @@ type buildReport struct {
 		Redis    struct {
 			Version string `json:"version"`
 		} `json:"redis"`
+		Xlswriter struct {
+			Version string `json:"version"`
+		} `json:"xlswriter"`
 	} `json:"recipe"`
 	Artifacts []struct {
 		Kind string `json:"kind"`
@@ -145,7 +148,11 @@ func CreateBundle(inputs []string, destination string, seed []byte, sequence uin
 		if err := readReport(filepath.Join(input, "build-result.json"), &report); err != nil {
 			return err
 		}
-		if report.Schema != 1 || report.Target != Target || !Filename(report.ID) || len(report.Artifacts) != 3 {
+		expectedArtifacts := 3
+		if report.Recipe.Xlswriter.Version != "" {
+			expectedArtifacts++
+		}
+		if report.Schema != 1 || !SupportedTarget(report.Target) || !Filename(report.ID) || len(report.Artifacts) != expectedArtifacts {
 			return errors.New("unsupported build report")
 		}
 		if err := verifyReport(filepath.Join(input, "sdk-verification.json"), report.ID, SDKChecks); err != nil {
@@ -153,6 +160,14 @@ func CreateBundle(inputs []string, destination string, seed []byte, sequence uin
 		}
 		if err := verifyReport(filepath.Join(input, "verification", "runtime-verification.json"), report.ID, RuntimeChecks); err != nil {
 			return err
+		}
+		if report.Recipe.Xlswriter.Version != "" {
+			if err := verifyReport(filepath.Join(input, "sdk-verification.json"), report.ID, []string{"xlswriter-rebuild", "xlswriter-actual-loading"}); err != nil {
+				return err
+			}
+			if err := verifyReport(filepath.Join(input, "verification", "runtime-verification.json"), report.ID, []string{"separate-xlswriter-import", "xlswriter-write-read-roundtrip", "xlswriter-fpm-loading"}); err != nil {
+				return err
+			}
 		}
 		b := Build{ID: report.ID, Target: report.Target, Version: report.Version, Revision: report.Recipe.Revision, PHPBinarySHA256: report.PHPBinarySHA256, PHPAPI: report.PHPAPI["PHP API"]}
 		kinds := map[string]bool{}
@@ -168,6 +183,8 @@ func CreateBundle(inputs []string, destination string, seed []byte, sequence uin
 				b.SDK = p.Package
 			case "redis":
 				b.Extensions = append(b.Extensions, Extension{Name: "redis", Version: report.Recipe.Redis.Version, Module: "redis.so", Package: p.Package})
+			case "xlswriter":
+				b.Extensions = append(b.Extensions, Extension{Name: "xlswriter", Version: report.Recipe.Xlswriter.Version, Module: "xlswriter.so", Package: p.Package})
 			default:
 				return errors.New("unexpected build artifact kind")
 			}

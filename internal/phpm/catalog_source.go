@@ -331,6 +331,11 @@ func (c *CLI) sourceCommand(args []string) error {
 }
 
 func requireDebianHost(goos, arch string, release []byte, libc string) error {
+	_, err := catalogHostTarget(goos, arch, release, libc)
+	return err
+}
+
+func catalogHostTarget(goos, arch string, release []byte, libc string) (string, error) {
 	fields := map[string]string{}
 	for _, line := range strings.Split(string(release), "\n") {
 		k, v, ok := strings.Cut(line, "=")
@@ -338,30 +343,40 @@ func requireDebianHost(goos, arch string, release []byte, libc string) error {
 			fields[k] = strings.Trim(v, `"'`)
 		}
 	}
-	if goos != "linux" || arch != "amd64" || fields["ID"] != "debian" || fields["VERSION_ID"] != "13" || strings.TrimSpace(libc) != "glibc 2.41" {
-		return errors.New("this catalog requires Debian 13 x86_64 with glibc 2.41; it is not compatible with OpenWrt/iStoreOS or other distributions")
+	if goos == "linux" && arch == "amd64" && fields["ID"] == "debian" {
+		switch fields["VERSION_ID"] + "/" + strings.TrimSpace(libc) {
+		case "12/glibc 2.36":
+			return catalog.Debian12Target, nil
+		case "13/glibc 2.41":
+			return catalog.Target, nil
+		}
 	}
-	return nil
+	return "", errors.New("signed PHP packages require Debian 12 x86_64 (glibc 2.36) or Debian 13 x86_64 (glibc 2.41); OpenWrt/iStoreOS and other distributions are not supported")
 }
 
 func checkDebianHost() error {
+	_, err := debianHostTarget()
+	return err
+}
+
+func debianHostTarget() (string, error) {
 	if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" {
-		return requireDebianHost(runtime.GOOS, runtime.GOARCH, nil, "")
+		return catalogHostTarget(runtime.GOOS, runtime.GOARCH, nil, "")
 	}
 	release, err := os.ReadFile("/etc/os-release")
 	if err != nil {
-		return err
+		return "", err
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	libc, err := exec.CommandContext(ctx, "getconf", "GNU_LIBC_VERSION").Output()
 	if err != nil {
-		return fmt.Errorf("cannot check required glibc version: %w", err)
+		return "", fmt.Errorf("cannot check required glibc version: %w", err)
 	}
-	return requireDebianHost(runtime.GOOS, runtime.GOARCH, release, string(libc))
+	return catalogHostTarget(runtime.GOOS, runtime.GOARCH, release, string(libc))
 }
 
-func selectCatalogBuild(index catalog.Catalog, requested string) (catalog.Build, error) {
+func selectCatalogBuild(index catalog.Catalog, requested, target string) (catalog.Build, error) {
 	if !versionPattern.MatchString(requested) {
 		return catalog.Build{}, errors.New("expected PHP major.minor or major.minor.patch")
 	}
@@ -374,11 +389,11 @@ func selectCatalogBuild(index catalog.Catalog, requested string) (catalog.Build,
 		return n > 0
 	})
 	for _, b := range builds {
-		if matchesVersion(b.Version, requested) {
+		if b.Target == target && matchesVersion(b.Version, requested) {
 			return b, nil
 		}
 	}
-	return catalog.Build{}, fmt.Errorf("no signed catalog build for PHP %s", requested)
+	return catalog.Build{}, fmt.Errorf("no signed catalog build for PHP %s on %s", requested, target)
 }
 
 func (s *Store) catalogPackage(ctx context.Context, source catalogSource, p catalog.Package, client *http.Client) (string, error) {
@@ -466,7 +481,8 @@ func (s *Store) installCatalogRuntime(ctx context.Context, sourceName, requested
 	if ts {
 		return Runtime{}, errors.New("the signed Debian catalog supplies NTS builds only")
 	}
-	if err := checkDebianHost(); err != nil {
+	target, err := debianHostTarget()
+	if err != nil {
 		return Runtime{}, err
 	}
 	client := catalogClient()
@@ -474,7 +490,7 @@ func (s *Store) installCatalogRuntime(ctx context.Context, sourceName, requested
 	if err != nil {
 		return Runtime{}, err
 	}
-	b, err := selectCatalogBuild(index, requested)
+	b, err := selectCatalogBuild(index, requested, target)
 	if err != nil {
 		return Runtime{}, err
 	}
@@ -485,6 +501,13 @@ func (s *Store) installCatalogRuntime(ctx context.Context, sourceName, requested
 }
 
 func (s *Store) importCatalogBuild(ctx context.Context, source catalogSource, b catalog.Build, client *http.Client) (Runtime, error) {
+	target, err := debianHostTarget()
+	if err != nil {
+		return Runtime{}, err
+	}
+	if b.Target != target {
+		return Runtime{}, fmt.Errorf("catalog package target %s does not match host %s", b.Target, target)
+	}
 	archive, err := s.catalogPackage(ctx, source, b.Runtime, client)
 	if err != nil {
 		return Runtime{}, err
@@ -587,7 +610,8 @@ func (s *Store) restoreCatalogLock(root, name string) error {
 }
 
 func (p windowsExtensionProvider) acquireCatalogExtension(ctx context.Context, rt Runtime, request ExtensionRequest) (acquiredExtension, error) {
-	if err := checkDebianHost(); err != nil {
+	target, err := debianHostTarget()
+	if err != nil {
 		return acquiredExtension{}, err
 	}
 	client := catalogClient()
@@ -599,7 +623,7 @@ func (p windowsExtensionProvider) acquireCatalogExtension(ctx context.Context, r
 		if b.ID != rt.Source.Build {
 			continue
 		}
-		if b.Version != rt.PHP.Version || b.PHPAPI != rt.PHP.API || b.Runtime.SHA256 != rt.Source.SHA256 {
+		if b.Target != target || b.Version != rt.PHP.Version || b.PHPAPI != rt.PHP.API || b.Runtime.SHA256 != rt.Source.SHA256 {
 			return acquiredExtension{}, errors.New("catalog runtime binding changed")
 		}
 		for _, e := range b.Extensions {

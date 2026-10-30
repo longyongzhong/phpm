@@ -38,21 +38,42 @@ def write_json(path, value):
     Path(path).write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
+def recipe_filename(php="8.4", debian="13"):
+    if php not in ("8.4", "8.5") or debian not in ("12", "13"):
+        raise ValueError("unsupported PHP/Debian recipe")
+    if debian == "12":
+        return f"recipes/debian12-php-{php}.json"
+    return "recipe.json" if php == "8.4" else "recipes/php-8.5.json"
+
+
+def target_profile(recipe):
+    profiles = {"debian12-x86_64-nts": ("12", "bookworm", "glibc 2.36"),
+                "debian13-x86_64-nts": ("13", "trixie", "glibc 2.41")}
+    if recipe["target"] not in profiles:
+        raise ValueError("unsupported recipe target")
+    return profiles[recipe["target"]]
+
+
+def runtime_packages_file(recipe):
+    return "runtime-packages-debian12.txt" if target_profile(recipe)[0] == "12" else "runtime-packages.txt"
+
+
 def load_recipe(root, filename="recipe.json"):
-    if filename not in ("recipe.json", "recipes/php-8.5.json"):
+    if filename not in {recipe_filename(php, debian) for php in ("8.4", "8.5") for debian in ("12", "13")}:
         raise ValueError("unsupported recipe file")
     recipe = json.loads((root / filename).read_text(encoding="utf-8"))
-    if recipe["schema"] != 1 or recipe["target"] != "debian13-x86_64-nts":
+    if recipe["schema"] != 1:
         raise ValueError("unsupported recipe schema/target")
-    if not re.fullmatch(r"debian:13-slim@sha256:[a-f0-9]{64}", recipe["base_image"]):
-        raise ValueError("a pinned official Debian 13 image is required")
+    debian, _, _ = target_profile(recipe)
+    if not re.fullmatch(r"debian:" + debian + r"-slim@sha256:[a-f0-9]{64}", recipe["base_image"]):
+        raise ValueError("a pinned official image matching the Debian target is required")
     if not re.fullmatch(r"\d{8}T\d{6}Z", recipe["apt_snapshot"]):
         raise ValueError("invalid Debian snapshot timestamp")
     if type(recipe["build_revision"]) is not int or recipe["build_revision"] < 1:
         raise ValueError("invalid build revision")
     if type(recipe["source_date_epoch"]) is not int or recipe["source_date_epoch"] < 1:
         raise ValueError("invalid source date epoch")
-    for name, host in (("php", "www.php.net"), ("redis", "pecl.php.net"), ("composer", "getcomposer.org")):
+    for name, host in (("php", "www.php.net"), ("redis", "pecl.php.net"), ("xlswriter", "pecl.php.net"), ("composer", "getcomposer.org")):
         item = recipe[name]
         if not re.fullmatch(r"\d+\.\d+\.\d+", item["version"]):
             raise ValueError("source versions must be exact numeric releases")
@@ -61,6 +82,7 @@ def load_recipe(root, filename="recipe.json"):
         url = urlparse(item["url"])
         expected = {"php": f"/distributions/php-{item['version']}.tar.xz",
                     "redis": f"/get/redis-{item['version']}.tgz",
+                    "xlswriter": f"/get/xlswriter-{item['version']}.tgz",
                     "composer": f"/download/{item['version']}/composer.phar"}[name]
         if url.scheme != "https" or url.netloc != host or url.path != expected or url.query or url.fragment:
             raise ValueError("source must use its fixed official HTTPS release URL")
@@ -72,7 +94,7 @@ def load_recipe(root, filename="recipe.json"):
         raise ValueError("invalid PHP release key pin")
     if not (root / php["key"]).is_file():
         raise ValueError("vendored PHP release key is missing")
-    for filename in ("build-packages.txt", "runtime-packages.txt"):
+    for filename in ("build-packages.txt", runtime_packages_file(recipe)):
         packages = read_lines(root / filename)
         if not packages or len(packages) != len(set(packages)) or any(
                 not re.fullmatch(r"[a-z0-9][a-z0-9+.-]*", p) for p in packages):
@@ -88,7 +110,7 @@ def load_recipe(root, filename="recipe.json"):
 
 def verify_inputs(root, directory, gpg="gpg", gpgv="gpgv", filename="recipe.json"):
     recipe = load_recipe(root, filename)
-    for name in ("php", "redis", "composer"):
+    for name in ("php", "redis", "xlswriter", "composer"):
         item = recipe[name]
         path = directory / Path(urlparse(item["url"]).path).name
         if not path.is_file() or sha256(path) != item["sha256"]:

@@ -99,10 +99,22 @@ func TestNativeSignedCatalogLifecycle(t *testing.T) {
 	command(true, "source", "list")
 	command(true, "php", "available", "--source", "verified")
 	command(true, "php", "install", original.Builds[0].Version, "--source", "verified")
-	command(true, "init", "--php", "8.4")
+	minor := strings.Join(strings.Split(original.Builds[0].Version, ".")[:2], ".")
+	command(true, "init", "--php", minor)
 	command(true, "install")
-	composer := `{"name":"phpm/distribution-test","version":"1.0.0","require":{"php":"^8.4","ext-redis":"^6.3","ext-curl":"*"}}`
-	if err := os.WriteFile(filepath.Join(project, "composer.json"), []byte(composer), 0600); err != nil {
+	requirements := map[string]string{"php": "^" + minor, "ext-redis": "^6.3", "ext-curl": "*"}
+	hasXlswriter := false
+	for _, extension := range original.Builds[0].Extensions {
+		if extension.Name == "xlswriter" {
+			hasXlswriter = true
+			requirements["ext-xlswriter"] = "*"
+		}
+	}
+	composer, err := json.Marshal(map[string]any{"name": "phpm/distribution-test", "version": "1.0.0", "require": requirements})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(project, "composer.json"), composer, 0600); err != nil {
 		t.Fatal(err)
 	}
 	command(true, "ext", "install", "--missing")
@@ -111,6 +123,13 @@ func TestNativeSignedCatalogLifecycle(t *testing.T) {
 	command(true, "verify")
 	if got := strings.TrimSpace(command(true, "exec", "--", "php", "-r", "echo phpversion('redis');")); got != "6.3.0" {
 		t.Fatalf("Redis not actually loaded: %s", got)
+	}
+	if hasXlswriter {
+		code := `$c=['path'=>getcwd()];$w=new \Vtiful\Kernel\Excel($c);$w->fileName('signed.xlsx')->header(['check'])->data([['phpm']])->output();$r=new \Vtiful\Kernel\Excel($c);echo json_encode($r->openFile('signed.xlsx')->openSheet()->getSheetData());`
+		if got := strings.TrimSpace(command(true, "exec", "--", "php", "-r", code)); got != `[["check"],["phpm"]]` {
+			t.Fatalf("signed xlswriter write/read failed: %s", got)
+		}
+		checks = append(checks, "signed-xlswriter-via-composer-missing", "signed-xlswriter-write-read")
 	}
 	checks = append(checks, "https-catalog-and-package-download", "explicit-public-key-pin", "php-install-from-source", "bundled-and-signed-redis-via-composer-missing", "frozen-install-and-real-loading")
 	var current LockedEnvironment
@@ -218,9 +237,12 @@ func TestNativeSignedCatalogLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	alt.Extensions = append([]catalog.Extension(nil), alt.Extensions...)
-	alt.Extensions[0].Package.Filename = "fixture2-redis.tar.gz"
-	if err := copyFile(filepath.Join(bundle, redis.Filename), filepath.Join(bundle, alt.Extensions[0].Package.Filename), 0600); err != nil {
-		t.Fatal(err)
+	for i := range alt.Extensions {
+		originalName := alt.Extensions[i].Package.Filename
+		alt.Extensions[i].Package.Filename = "fixture2-" + alt.Extensions[i].Name + ".tar.gz"
+		if err := copyFile(filepath.Join(bundle, originalName), filepath.Join(bundle, alt.Extensions[i].Package.Filename), 0600); err != nil {
+			t.Fatal(err)
+		}
 	}
 	updated.Builds = append(updated.Builds, alt)
 	if err := updated.Validate(time.Now()); err != nil {

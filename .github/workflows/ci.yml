@@ -47,6 +47,12 @@ jobs:
         run: |
           python3 scripts/test_install_phpm.py
           python3 -m unittest discover -s build/release -p 'test_*.py'
+          python3 -m unittest discover -s build/linux/tests -v
+          for debian in 12 13; do
+            for php in 8.4 8.5; do
+              python3 build/linux/build.py check --debian "$debian" --php "$php"
+            done
+          done
 
   linux-bootstrap:
     runs-on: ubuntu-latest

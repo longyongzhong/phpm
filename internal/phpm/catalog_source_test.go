@@ -176,7 +176,7 @@ func TestCatalogOriginHostAndSelection(t *testing.T) {
 	if err := requireDebianHost("linux", "amd64", []byte("ID=debian\nVERSION_ID=\"13\"\n"), "glibc 2.41\n"); err != nil {
 		t.Fatal(err)
 	}
-	for _, host := range []struct{ goos, arch, release, libc string }{{"linux", "amd64", "ID=openwrt\nVERSION_ID=24", "musl"}, {"linux", "amd64", "ID=debian\nVERSION_ID=12", "glibc 2.36"}, {"linux", "arm64", "ID=debian\nVERSION_ID=13", "glibc 2.41"}, {"windows", "amd64", "", ""}} {
+	for _, host := range []struct{ goos, arch, release, libc string }{{"linux", "amd64", "ID=openwrt\nVERSION_ID=24", "musl"}, {"linux", "amd64", "ID=debian\nVERSION_ID=12", "glibc 2.41"}, {"linux", "arm64", "ID=debian\nVERSION_ID=13", "glibc 2.41"}, {"windows", "amd64", "", ""}} {
 		if err := requireDebianHost(host.goos, host.arch, []byte(host.release), host.libc); err == nil {
 			t.Fatal("accepted unsupported host")
 		}
@@ -186,8 +186,35 @@ func TestCatalogOriginHostAndSelection(t *testing.T) {
 	b.Revision = 2
 	b.ID = "newer"
 	index.Builds = append(index.Builds, b)
-	selected, err := selectCatalogBuild(index, "8.4")
+	selected, err := selectCatalogBuild(index, "8.4", catalog.Target)
 	if err != nil || selected.ID != "newer" {
 		t.Fatalf("selection: %+v %v", selected, err)
+	}
+}
+
+func TestCatalogSelectsOnlyTheExactDebianTarget(t *testing.T) {
+	index, _ := signedFixture(t)
+	debian12 := index.Builds[0]
+	debian12.ID, debian12.Target = "debian12", catalog.Debian12Target
+	debian12.Revision = 99 // A higher foreign revision must never win selection.
+	index.Builds = append(index.Builds, debian12)
+	for _, target := range []string{catalog.Target, catalog.Debian12Target} {
+		selected, err := selectCatalogBuild(index, "8.4", target)
+		if err != nil || selected.Target != target {
+			t.Fatalf("wrong target selected: %+v %v", selected, err)
+		}
+	}
+	index.Builds = index.Builds[:1]
+	if _, err := selectCatalogBuild(index, "8.4", catalog.Debian12Target); err == nil {
+		t.Fatal("fell back to a Debian 13 package on Debian 12")
+	}
+	for _, host := range []struct{ release, libc, target string }{
+		{"ID=debian\nVERSION_ID=12", "glibc 2.36", catalog.Debian12Target},
+		{"ID=debian\nVERSION_ID=13", "glibc 2.41", catalog.Target},
+	} {
+		target, err := catalogHostTarget("linux", "amd64", []byte(host.release), host.libc)
+		if err != nil || target != host.target {
+			t.Fatalf("host detection: %s %v", target, err)
+		}
 	}
 }

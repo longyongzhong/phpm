@@ -1,5 +1,9 @@
 # Debian 官方源码构建：阶段 A
 
+当前源码新增 Debian 12/13 × PHP 8.4/8.5 和独立 xlswriter 包，详见
+[预编译扩展说明](../../docs/precompiled-extensions.zh-CN.md)。下文原始验收记录来自
+Debian 13；新增组合需要新的真实构建验收，不包含在已发布 rc.1 中。
+
 此目录是 PHP/Redis 构建验证入口，不是已发布的生产下载源。客户端当前的
 `php install` 行为不变，Linux 默认来源仍是实验性的 StaticPHP。
 
@@ -59,6 +63,7 @@ python3 build/linux/build.py build --php 8.5 --output .cache/debian13-php85
 php-8.4.27.tar.xz
 php-8.4.27.tar.xz.asc
 redis-6.3.0.tgz
+xlswriter-3.0.0.tgz
 composer.phar
 ```
 

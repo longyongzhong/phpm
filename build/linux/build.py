@@ -11,13 +11,13 @@ import sys
 import tempfile
 from urllib.parse import urlparse
 
-from common import load_recipe, output, run, verify_inputs
+from common import load_recipe, output, recipe_filename, run, target_profile, verify_inputs
 
 
 ROOT = Path(__file__).resolve().parent
 PROJECT = ROOT.parent.parent
 CONTEXT_FILES = ("Dockerfile", "recipe.json", "build-packages.txt", "runtime-packages.txt",
-                 "configure-flags.txt", "common.py", "assemble.py", "verify-sdk.py", "verify-runtime.py")
+                 "configure-flags.txt", "common.py", "extensions.py", "runtime-packages-debian12.txt", "assemble.py", "verify-sdk.py", "verify-runtime.py")
 
 
 def main():
@@ -34,14 +34,15 @@ def main():
     build.add_argument("--jobs", type=int, default=2, choices=range(1, 33))
     for command in (check, inputs, build):
         command.add_argument("--php", choices=("8.4", "8.5"), default="8.4", help="pinned PHP recipe")
+        command.add_argument("--debian", choices=("12", "13"), default="13", help="target Debian version")
     args = parser.parse_args()
-    recipe_name = "recipe.json" if args.php == "8.4" else "recipes/php-8.5.json"
+    recipe_name = recipe_filename(args.php, args.debian)
     recipe = load_recipe(ROOT, recipe_name)
     for name in CONTEXT_FILES:
         if not (ROOT / name).is_file():
             raise ValueError(f"build file is missing: {name}")
     if args.command == "check":
-        print(f"Recipe valid: PHP {recipe['php']['version']}, Redis {recipe['redis']['version']}, {recipe['target']}")
+        print(f"Recipe valid: PHP {recipe['php']['version']}, Redis {recipe['redis']['version']}, xlswriter {recipe['xlswriter']['version']}, {recipe['target']}")
         return
     if args.command == "verify-inputs":
         verify_inputs(ROOT, args.directory.resolve(), args.gpg, args.gpgv, recipe_name)
@@ -66,7 +67,7 @@ def main():
         (context / "inputs").mkdir()
         if args.inputs:
             # Full signature verification is repeated inside the build container.
-            for item in (recipe["php"], recipe["redis"], recipe["composer"]):
+            for item in (recipe["php"], recipe["redis"], recipe["xlswriter"], recipe["composer"]):
                 name = Path(urlparse(item["url"]).path).name
                 shutil.copyfile(args.inputs / name, context / "inputs" / name)
             name = Path(urlparse(recipe["php"]["signature_url"]).path).name
@@ -76,6 +77,7 @@ def main():
         env = dict(os.environ, GOOS="linux", GOARCH="amd64", CGO_ENABLED="0", GOAMD64="v1",
                    TEMP=str(temp_go), TMP=str(temp_go), TMPDIR=str(temp_go))
         run(["go", "build", "-trimpath", "-o", context / "phpm", "./cmd/phpm"], cwd=PROJECT, env=env)
+        run(["go", "test", "-c", "-o", context / "phpm.test", "./internal/phpm"], cwd=PROJECT, env=env)
         # The daemon receives only build scripts, public keys, optional sources and the CLI.
         if temp_go.resolve().parent != context:
             raise ValueError("Go temporary directory escaped the owned build context")
@@ -83,6 +85,7 @@ def main():
         run(["docker", "build", "--platform", "linux/amd64", "--target", "artifacts", "--progress", "plain",
              "--build-arg", f"BASE_IMAGE={recipe['base_image']}",
              "--build-arg", f"APT_SNAPSHOT={recipe['apt_snapshot']}",
+             "--build-arg", f"DEBIAN_SUITE={target_profile(recipe)[1]}",
              "--build-arg", f"BUILD_JOBS={args.jobs}",
              "--output", f"type=local,dest={destination}", context], env=dict(os.environ, DOCKER_BUILDKIT="1"))
     report = json.loads((destination / "verification/runtime-verification.json").read_text())

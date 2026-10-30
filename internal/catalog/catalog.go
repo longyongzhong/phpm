@@ -17,7 +17,12 @@ import (
 )
 
 const Target = "debian13-x86_64-nts"
+const Debian12Target = "debian12-x86_64-nts"
 const MaxSize = 4 * 1024 * 1024
+
+func SupportedTarget(target string) bool {
+	return target == Target || target == Debian12Target
+}
 
 type Package struct {
 	Filename string `json:"filename"`
@@ -82,7 +87,7 @@ func (c Catalog) Validate(now time.Time) error {
 	ids, revisions, files := map[string]bool{}, map[string]bool{}, map[string]bool{}
 	for _, b := range c.Builds {
 		key := fmt.Sprintf("%s/%s/%d", b.Target, b.Version, b.Revision)
-		if !Filename(b.ID) || !Version.MatchString(b.Version) || b.Target != Target || b.Revision < 1 || !ValidSHA(b.PHPBinarySHA256) || !api.MatchString(b.PHPAPI) || ids[b.ID] || revisions[key] {
+		if !Filename(b.ID) || !Version.MatchString(b.Version) || !SupportedTarget(b.Target) || b.Revision < 1 || !ValidSHA(b.PHPBinarySHA256) || !api.MatchString(b.PHPAPI) || ids[b.ID] || revisions[key] {
 			return errors.New("invalid or ambiguous catalog build identity/target/revision")
 		}
 		ids[b.ID], revisions[key] = true, true

@@ -12,6 +12,11 @@ The first signed candidate [0.1.0-rc.1](https://github.com/longyongzhong/phpm/re
 is available. See the [Linux testing guide](docs/linux-test.zh-CN.md) for downloads
 and the distinction between the Linux client and Debian-13-only PHP packages.
 
+Current source adds separate Debian 12/13 recipes and precompiled xlswriter;
+see the [precompiled extension milestone](docs/precompiled-extensions.zh-CN.md).
+These additions require new native acceptance and a new release; they are not
+included in the published rc.1 assets.
+
 ## Current scope
 
 | Capability | Windows x64 | Linux / macOS |
@@ -20,12 +25,12 @@ and the distinction between the Linux client and Debian-13-only PHP packages.
 | Official PHP download + SHA-256 verification | Implemented | Not implemented |
 | StaticPHP community static PHP download + published SHA-256 | Not used | Linux x64 NTS common preset; other architectures/macOS use imports |
 | Import and probe local dynamic extensions | DLL | SO; requires compatible host libraries |
-| `ext install`: online extension installation | Official PECL Windows x64 archives | Bundled modules; signed-catalog Redis for Debian 13 x64 |
+| `ext install`: online extension installation | Official PECL Windows x64 archives | Bundled modules; matching extensions from signed Debian 12/13 catalogs (published rc.1: Debian 13 Redis) |
 | Project YAML, platform lock, immutable environment | Implemented | Implemented |
 | Execute with independent PHP configuration | Implemented | Implemented; Unix launcher uses process replacement |
 | Run Composer with project PHP; inspect declared platform requirements | Implemented; requires compatible Composer 2 PHAR for checks | Implemented; same requirement |
-| Automated PHP/extension source builds or PIE integration | Not implemented | Debian 13 x64 build workflow and opt-in signed catalog; PIE not implemented |
-| Signed catalog install and exact locked artifact restoration | Not used | Opt-in Debian 13 x64 NTS provider; explicit public-key trust |
+| Automated PHP/extension source builds or PIE integration | Not implemented | Debian 12/13 x64 build workflow; client-side compilation/PIE not implemented |
+| Signed catalog install and exact locked artifact restoration | Not used | Opt-in Debian 12/13 x64 NTS targets; explicit public-key trust |
 | Prepare/test/activate/rollback project PHP upgrades | Implemented | Linux x64 StaticPHP downloads or preimported runtimes; compatible cached/bundled extensions |
 | FPM, service restart, production deployment, garbage collection | Not implemented | Not implemented |
 

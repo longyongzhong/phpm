@@ -7,6 +7,7 @@ from pathlib import Path
 import tempfile
 
 from common import extract_archive, output, run, sha256, write_json
+from extensions import EXTENSIONS, build_extension
 
 
 def main():
@@ -27,22 +28,12 @@ def main():
         if sha256(relocated / "bin/php") != result["php_binary_sha256"]:
             raise ValueError("SDK PHP does not match the runtime")
         run([relocated / "bin/phpize", "--version"])
-        version = result["recipe"]["redis"]["version"]
-        extract_archive(Path(f"/work/downloads/redis-{version}.tgz"), root / "source")
-        source = root / "source" / f"redis-{version}"
         env = dict(os.environ, CFLAGS=result["cflags"], HOME=temp)
-        run([relocated / "bin/phpize"], cwd=source, env=env)
-        run(["./configure", f"--with-php-config={config}", "--enable-redis",
-             "--disable-redis-igbinary", "--disable-redis-msgpack", "--disable-redis-lzf",
-             "--disable-redis-zstd", "--disable-redis-lz4"], cwd=source, env=env)
-        run(["make", "-j2"], cwd=source, env=env)
-        actual = output([relocated / "bin/php", "-n", "-d", f"extension={source / 'modules/redis.so'}",
-                         "-r", "echo phpversion('redis');"])
-        if actual != version:
-            raise ValueError("extension rebuilt with relocated SDK did not load")
-        write_json(packages / "sdk-verification.json", {"schema": 1, "build_id": result["build_id"],
-                   "checks": ["relocated-prefix", "relocated-headers", "php-identity", "phpize",
-                              "redis-rebuild", "redis-actual-loading"]})
+        checks = ["relocated-prefix", "relocated-headers", "php-identity", "phpize"]
+        for name in EXTENSIONS:
+            build_extension(result["recipe"], name, Path("/work/downloads"), relocated, root, env, 2)
+            checks += [name + "-rebuild", name + "-actual-loading"]
+        write_json(packages / "sdk-verification.json", {"schema": 1, "build_id": result["build_id"], "checks": checks})
     print("Relocated SDK build/load verification passed.", flush=True)
 
 

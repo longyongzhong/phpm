@@ -8,6 +8,11 @@ on:
         type: choice
         default: '8.4'
         options: ['8.4', '8.5']
+      debian:
+        description: Target Debian version (separate binaries and dependencies)
+        type: choice
+        default: '13'
+        options: ['12', '13']
 
 permissions:
   contents: read
@@ -25,17 +30,19 @@ jobs:
       - name: Validate pinned recipe and build helpers
         env:
           PHP_SERIES: ${{ inputs.php || '8.4' }}
+          DEBIAN_VERSION: ${{ inputs.debian || '13' }}
         run: |
-          python3 build/linux/build.py check --php "$PHP_SERIES"
+          python3 build/linux/build.py check --php "$PHP_SERIES" --debian "$DEBIAN_VERSION"
           python3 -m unittest discover -s build/linux/tests -v
       - name: Build packages and run SDK/fresh-container checks
         env:
           PHP_SERIES: ${{ inputs.php || '8.4' }}
-        run: python3 build/linux/build.py build --php "$PHP_SERIES" --output "$RUNNER_TEMP/phpm-debian13-build"
+          DEBIAN_VERSION: ${{ inputs.debian || '13' }}
+        run: python3 build/linux/build.py build --php "$PHP_SERIES" --debian "$DEBIAN_VERSION" --output "$RUNNER_TEMP/phpm-debian-build"
       - name: Retain unpublished packages and verification reports
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: phpm-debian13-source-build-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/phpm-debian13-build/
+          name: phpm-debian${{ inputs.debian || '13' }}-source-build-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/phpm-debian-build/
           if-no-files-found: error
           retention-days: 14

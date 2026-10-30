@@ -12,7 +12,8 @@ import shutil
 from urllib.parse import urlparse
 
 from common import (extract_archive, load_recipe, output, pack_archive, read_lines,
-                    relocate_sdk_script, run, sha256, verify_inputs, write_json)
+                    relocate_sdk_script, run, runtime_packages_file, sha256, target_profile, verify_inputs, write_json)
+from extensions import EXTENSIONS, build_extension
 
 
 ROOT = Path("/recipe")
@@ -55,8 +56,9 @@ def main():
     if platform.system() != "Linux" or platform.machine() != "x86_64":
         raise SystemExit("assemble.py requires the recipe's Linux x86_64 container")
     recipe = load_recipe(ROOT)
-    if 'VERSION_ID="13"' not in Path("/etc/os-release").read_text():
-        raise SystemExit("Debian 13 is required")
+    debian, _, libc = target_profile(recipe)
+    if f'VERSION_ID="{debian}"' not in Path("/etc/os-release").read_text() or output(["getconf", "GNU_LIBC_VERSION"]) != libc:
+        raise SystemExit("build host must match the recipe Debian/glibc target")
     if Path(PREFIX).exists():
         raise SystemExit("build prefix must not exist; relocation tests require a staged install")
     downloads = WORK / "downloads"
@@ -65,7 +67,7 @@ def main():
         if not source.is_file() or source.is_symlink():
             raise ValueError("input cache must contain regular files only")
         shutil.copyfile(source, downloads / source.name)
-    for name in ("php", "redis", "composer"):
+    for name in ("php", "redis", "xlswriter", "composer"):
         fetch(recipe[name], downloads)
     fetch(recipe["php"], downloads, signature=True)
     verify_inputs(ROOT, downloads)
@@ -116,24 +118,17 @@ def main():
     copy_licenses(php_source, runtime / "licenses/php")
     copy_licenses(php_source, sdk / "licenses/php")
 
-    extract_archive(downloads / f"redis-{recipe['redis']['version']}.tgz", WORK / "redis-source")
-    redis_source = WORK / "redis-source" / f"redis-{recipe['redis']['version']}"
-    run([sdk / "bin/phpize"], cwd=redis_source, env=env)
-    run(["./configure", f"--with-php-config={sdk / 'bin/php-config'}", "--enable-redis",
-         "--disable-redis-igbinary", "--disable-redis-msgpack", "--disable-redis-lzf",
-         "--disable-redis-zstd", "--disable-redis-lz4"], cwd=redis_source, env=env)
-    run(["make", f"-j{jobs}"], cwd=redis_source, env=env)
-    redis = WORK / "redis"
-    copy_file(redis_source / "modules/redis.so", redis / "redis.so")
-    copy_licenses(redis_source, redis / "licenses/redis")
-    version = output([runtime / "bin/php", "-n", "-d", f"extension={redis / 'redis.so'}",
-                      "-r", "echo phpversion('redis');"])
-    if version != recipe["redis"]["version"]:
-        raise ValueError("Redis identity probe did not match the recipe")
+    extension_payloads = {}
+    for name in EXTENSIONS:
+        source = build_extension(recipe, name, downloads, sdk, WORK, env, jobs)
+        payload = WORK / name
+        copy_file(source / "modules" / (name + ".so"), payload / (name + ".so"))
+        copy_licenses(source, payload / "licenses" / name)
+        extension_payloads[name] = payload
 
     recipe_files = sorted(p for p in ROOT.rglob("*") if p.is_file()
                           and p.suffix != ".pyc" and "__pycache__" not in p.parts
-                          and "inputs" not in p.relative_to(ROOT).parts and p.name != "phpm")
+                          and "inputs" not in p.relative_to(ROOT).parts and p.name not in ("phpm", "phpm.test"))
     recipe_hashes = {p.relative_to(ROOT).as_posix(): sha256(p) for p in recipe_files}
     recipe_digest = hashlib.sha256(json.dumps(recipe_hashes, sort_keys=True).encode()).hexdigest()
     build_id = f"php-{recipe['php']['version']}-{recipe['target']}-b{recipe['build_revision']}-{recipe_digest[:12]}"
@@ -149,13 +144,13 @@ def main():
             "release_status": "unsigned-stage-a", "recipe": recipe, "recipe_files": recipe_hashes,
             "compiler": output(["cc", "--version"]).splitlines()[0], "cflags": env["CFLAGS"],
             "configure": flags, "php_api": api, "glibc": output(["getconf", "GNU_LIBC_VERSION"]),
-            "build_packages": packages, "runtime_packages": read_lines(ROOT / "runtime-packages.txt"),
+            "build_packages": packages, "runtime_packages": read_lines(ROOT / runtime_packages_file(recipe)),
             "php_binary_sha256": sha256(runtime / "bin/php")}
     artifacts = []
-    for kind, payload in (("runtime", runtime), ("sdk", sdk), ("redis", redis)):
+    for kind, payload in (("runtime", runtime), ("sdk", sdk), *extension_payloads.items()):
         receipt = dict(base, kind=kind)
-        if kind == "redis":
-            receipt.update(extension="redis", extension_version=version, runtime_build=build_id)
+        if kind in EXTENSIONS:
+            receipt.update(extension=kind, extension_version=recipe[kind]["version"], runtime_build=build_id)
         write_json(payload / "phpm-build.json", receipt)
         filename = f"{build_id}-{kind}.tar.gz"
         pack_archive(payload, OUT / filename, recipe["source_date_epoch"])

@@ -12,6 +12,16 @@ on:
       target_run:
         type: string
         required: true
+      debian12_base_run:
+        description: Optional successful Debian 12 PHP 8.4 source run (supply both Debian 12 runs)
+        type: string
+        required: false
+        default: ''
+      debian12_target_run:
+        description: Optional successful Debian 12 PHP 8.5 source run
+        type: string
+        required: false
+        default: ''
     outputs:
       request_sha256:
         value: ${{ jobs.prepare.outputs.request_sha256 }}
@@ -29,6 +39,17 @@ on:
         description: Successful stage-A PHP 8.5 build run ID
         type: string
         required: true
+
+      debian12_base_run:
+        description: Optional successful Debian 12 PHP 8.4 source run (supply both Debian 12 runs)
+        type: string
+        required: false
+        default: ''
+      debian12_target_run:
+        description: Optional successful Debian 12 PHP 8.5 source run
+        type: string
+        required: false
+        default: ''
 
 permissions:
   contents: read
@@ -51,6 +72,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           BASE_RUN: ${{ inputs.base_run }}
           TARGET_RUN: ${{ inputs.target_run }}
+          DEBIAN12_BASE_RUN: ${{ inputs.debian12_base_run }}
+          DEBIAN12_TARGET_RUN: ${{ inputs.debian12_target_run }}
         shell: bash
         run: |
           set -euo pipefail
@@ -60,8 +83,13 @@ jobs:
           root = Path(os.environ['RUNNER_TEMP'])
           repo = os.environ['GITHUB_REPOSITORY']
           records = []
-          for role in ('base', 'target'):
-              run_id = os.environ[role.upper() + '_RUN']
+          roles = ['base', 'target']
+          if bool(os.environ['DEBIAN12_BASE_RUN']) != bool(os.environ['DEBIAN12_TARGET_RUN']):
+              raise SystemExit('Supply both Debian 12 source runs')
+          if os.environ['DEBIAN12_BASE_RUN']:
+              roles += ['debian12-base', 'debian12-target']
+          for role in roles:
+              run_id = os.environ[role.upper().replace('-', '_') + '_RUN']
               if not re.fullmatch(r'[1-9][0-9]*', run_id):
                   raise SystemExit('Invalid source run ID')
               def api(path):
@@ -69,12 +97,17 @@ jobs:
               run = api(f'repos/{repo}/actions/runs/{run_id}')
               if run['conclusion'] != 'success' or run['path'] != '.github/workflows/debian-source-build.yml' or run['repository']['full_name'] != repo:
                   raise SystemExit('Expected a successful same-repository stage-A build')
-              name = f"phpm-debian13-source-build-{run_id}-{run['run_attempt']}"
+              debian = '12' if role.startswith('debian12-') else '13'
+              name = f"phpm-debian{debian}-source-build-{run_id}-{run['run_attempt']}"
               matches = [a for a in api(f'repos/{repo}/actions/runs/{run_id}/artifacts')['artifacts'] if a['name'] == name and not a['expired']]
               if len(matches) != 1 or not re.fullmatch(r'sha256:[a-f0-9]{64}', matches[0].get('digest', '')):
                   raise SystemExit('Accepted source artifact is missing, expired or ambiguous')
               artifact = matches[0]
               subprocess.run(['gh', 'run', 'download', run_id, '--repo', repo, '--name', name, '--dir', str(root / (role + '-packages'))], check=True)
+              report = json.loads((root / (role + '-packages') / 'build-result.json').read_text())
+              minor = '8.4' if role.endswith('base') else '8.5'
+              if report['target'] != f'debian{debian}-x86_64-nts' or not report['php_version'].startswith(minor + '.'):
+                  raise SystemExit('Source artifact does not match its requested target/PHP role')
               records.append({'role': role, 'run_id': int(run_id), 'attempt': run['run_attempt'], 'commit': run['head_sha'],
                               'artifact_id': artifact['id'], 'artifact_digest': artifact['digest']})
           (root / 'provenance.json').write_text(json.dumps({'repository': repo, 'source_runs': records}, indent=2))
@@ -88,7 +121,13 @@ jobs:
         id: materials
         env:
           CANDIDATE_VERSION: ${{ inputs.version }}
-        run: python3 build/release/prepare.py --base "$RUNNER_TEMP/base-packages" --target "$RUNNER_TEMP/target-packages" --version "$CANDIDATE_VERSION" --repo "$GITHUB_REPOSITORY" --provenance "$RUNNER_TEMP/provenance.json" --output "$RUNNER_TEMP/offline-materials"
+          DEBIAN12_BASE_RUN: ${{ inputs.debian12_base_run }}
+        run: |
+          extra=()
+          if [ -n "$DEBIAN12_BASE_RUN" ]; then
+            extra=(--debian12-base "$RUNNER_TEMP/debian12-base-packages" --debian12-target "$RUNNER_TEMP/debian12-target-packages")
+          fi
+          python3 build/release/prepare.py --base "$RUNNER_TEMP/base-packages" --target "$RUNNER_TEMP/target-packages" "${extra[@]}" --version "$CANDIDATE_VERSION" --repo "$GITHUB_REPOSITORY" --provenance "$RUNNER_TEMP/provenance.json" --output "$RUNNER_TEMP/offline-materials"
       - name: Test shipped offline signer with disposable keys and install the real client
         run: python3 build/release/roundtrip.py --materials "$RUNNER_TEMP/offline-materials"
       - name: Test GitHub signing secret path with disposable keys and install the real client

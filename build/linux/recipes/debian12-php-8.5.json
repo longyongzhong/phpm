@@ -1,0 +1,31 @@
+{
+  "schema": 1,
+  "target": "debian12-x86_64-nts",
+  "build_revision": 1,
+  "base_image": "debian:12-slim@sha256:a3bba7dc7dbcc1f37c2856c51fc9a7fac96608f50cb87b1b4e4d8b8c85ae988e",
+  "apt_snapshot": "20261028T030000Z",
+  "source_date_epoch": 1792540800,
+  "php": {
+    "version": "8.5.12",
+    "url": "https://www.php.net/distributions/php-8.5.12.tar.xz",
+    "sha256": "08bc2eba2a588654ade1357174aa646b761556c862dda0678345ee29ed481209",
+    "signature_url": "https://www.php.net/distributions/php-8.5.12.tar.xz.asc",
+    "signer": "D95C03BC702BE9515344AE3374E44BC9067701A5",
+    "key": "keys/php-8.5.asc"
+  },
+  "redis": {
+    "version": "6.3.0",
+    "url": "https://pecl.php.net/get/redis-6.3.0.tgz",
+    "sha256": "0d5141f634bd1db6c1ddcda053d25ecf2c4fc1c395430d534fd3f8d51dd7f0b5"
+  },
+  "composer": {
+    "version": "2.10.3",
+    "url": "https://getcomposer.org/download/2.10.3/composer.phar",
+    "sha256": "7a2d379d5b8ffdaa028580ef26494c36d2feef4b178d3dd1473a4dbc5e17c8d6"
+  },
+  "xlswriter": {
+    "version": "3.0.0",
+    "url": "https://pecl.php.net/get/xlswriter-3.0.0.tgz",
+    "sha256": "a17986ad5ac09529513fc59b2871ca2b53eaec1c2c55cf00be60a292e85ade73"
+  }
+}

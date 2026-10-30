@@ -88,3 +88,51 @@ func TestReleaseRequiresAllGatesAndLeavesNoPartialDestination(t *testing.T) {
 		t.Fatal("overwrote existing release")
 	}
 }
+
+func TestReleaseRequiresXlswriterNativeChecks(t *testing.T) {
+	input := t.TempDir()
+	write := func(name string, value any) {
+		t.Helper()
+		data, err := json.Marshal(value)
+		if err != nil {
+			t.Fatal(err)
+		}
+		path := filepath.Join(input, filepath.FromSlash(name))
+		if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, data, 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Synthetic metadata checks gate enforcement only; it is not a native build.
+	write("build-result.json", map[string]any{"schema": 1, "build_id": "unit-fixture", "target": Debian12Target,
+		"recipe": map[string]any{"xlswriter": map[string]string{"version": "3.0.0"}}, "artifacts": []any{nil, nil, nil, nil}})
+	write("sdk-verification.json", map[string]any{"schema": 1, "build_id": "unit-fixture", "checks": SDKChecks})
+	write("verification/runtime-verification.json", map[string]any{"schema": 1, "build_id": "unit-fixture", "checks": RuntimeChecks})
+	_, key, _ := ed25519.GenerateKey(rand.Reader)
+	for _, missing := range []string{"xlswriter-rebuild", "separate-xlswriter-import"} {
+		out := filepath.Join(t.TempDir(), "bundle")
+		err := CreateBundle([]string{input}, out, key.Seed(), 1, time.Now(), time.Hour)
+		if err == nil || !strings.Contains(err.Error(), missing) {
+			t.Fatalf("expected missing %s gate, got %v", missing, err)
+		}
+		if _, err := os.Stat(out); !os.IsNotExist(err) {
+			t.Fatal("exposed an unverified bundle")
+		}
+		write("sdk-verification.json", map[string]any{"schema": 1, "build_id": "unit-fixture", "checks": append(append([]string{}, SDKChecks...), "xlswriter-rebuild", "xlswriter-actual-loading")})
+	}
+}
+
+func TestCatalogAcceptsSeparateDebianBuildsForTheSamePHP(t *testing.T) {
+	c := fixture(time.Now())
+	b := c.Builds[0]
+	b.ID, b.Target = "debian12-fixture", Debian12Target
+	b.Runtime.Filename, b.SDK.Filename = "debian12-runtime.tar.gz", "debian12-sdk.tar.gz"
+	b.Extensions = append([]Extension(nil), b.Extensions...)
+	b.Extensions[0].Package.Filename = "debian12-redis.tar.gz"
+	c.Builds = append(c.Builds, b)
+	if err := c.Validate(time.Now()); err != nil {
+		t.Fatal(err)
+	}
+}

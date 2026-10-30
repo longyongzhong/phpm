@@ -6,10 +6,25 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from offline import hash_file, inspect_materials, NOTICES, safe_path, sign
+from offline import build_directories, hash_file, inspect_materials, NOTICES, safe_path, sign
 
 
 class OfflineMaterialsTests(unittest.TestCase):
+    def test_optional_debian12_inputs_require_the_complete_pair(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            for role in ("base", "target"):
+                (root / "inputs" / role).mkdir(parents=True)
+            self.assertEqual(len(build_directories(root)), 2)
+            (root / "inputs/debian12-base").mkdir()
+            with self.assertRaises(ValueError):
+                build_directories(root)
+            (root / "inputs/debian12-target").mkdir()
+            self.assertEqual(len(build_directories(root)), 4)
+            (root / "inputs/unexpected").mkdir()
+            with self.assertRaises(ValueError):
+                build_directories(root)
+
     def materials(self, root):
         names = ["clients/linux-amd64/phpm", "clients/windows-amd64/phpm.exe", "tools/linux-amd64/phpm-release",
                  "tools/windows-amd64/phpm-release.exe", "install-phpm.py", "offline-sign.py"]

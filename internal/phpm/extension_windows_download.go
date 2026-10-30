@@ -83,7 +83,7 @@ func (p windowsExtensionProvider) acquire(ctx context.Context, rt Runtime, reque
 		if rt.Source.Kind == "signed-catalog" {
 			return p.acquireCatalogExtension(ctx, rt, request)
 		}
-		return acquiredExtension{}, errors.New("online extension downloads currently support Windows x64; Linux/macOS support bundled modules and ext import, with source-build support still pending")
+		return acquiredExtension{}, errors.New("no downloadable extension for this runtime: Windows and registered signed catalogs support precompiled extensions; fully static PHP needs a build containing this module, and automatic source compilation is not implemented")
 	}
 	version, raw, err := p.resolveArchive(ctx, rt, request)
 	if err != nil {

@@ -12,7 +12,7 @@ import sys
 import tempfile
 from urllib.request import urlopen
 
-from common import load_recipe, output, run
+from common import load_recipe, output, recipe_filename, run, runtime_packages_file, target_profile
 
 ROOT = Path(__file__).resolve().parent
 PROJECT = ROOT.parent.parent
@@ -24,7 +24,6 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--composer", type=Path, help="optional pinned Composer PHAR cache")
     args = parser.parse_args()
-    recipe = load_recipe(ROOT)
     if output(["docker", "info", "--format", "{{.OSType}}"]) != "linux":
         raise ValueError("a running Linux Docker engine is required")
     destination = args.output.resolve()
@@ -33,10 +32,12 @@ def main():
     destination.parent.mkdir(parents=True, exist_ok=True)
     packages = args.packages.resolve()
     result = json.loads((packages / "build-result.json").read_text())
+    debian = {"debian12-x86_64-nts": "12", "debian13-x86_64-nts": "13"}.get(result["target"])
+    recipe = load_recipe(ROOT, recipe_filename(".".join(result["php_version"].split(".")[:2]), debian))
     with tempfile.TemporaryDirectory(prefix=".phpm-distribution-", dir=destination.parent) as temp:
         context = Path(temp)
         shutil.copyfile(ROOT / "distribution.Dockerfile", context / "Dockerfile")
-        shutil.copyfile(ROOT / "runtime-packages.txt", context / "runtime-packages.txt")
+        shutil.copyfile(ROOT / runtime_packages_file(recipe), context / "runtime-packages.txt")
         (context / "packages/verification").mkdir(parents=True)
         for name in ("build-result.json", "sdk-verification.json", "verification/runtime-verification.json"):
             shutil.copyfile(packages / name, context / "packages" / name)
@@ -65,6 +66,7 @@ def main():
         run(["docker", "build", "--platform", "linux/amd64", "--target", "artifacts", "--progress", "plain",
              "--build-arg", f"BASE_IMAGE={recipe['base_image']}",
              "--build-arg", f"APT_SNAPSHOT={recipe['apt_snapshot']}",
+             "--build-arg", f"DEBIAN_SUITE={target_profile(recipe)[1]}",
              "--output", f"type=local,dest={destination}", context], env=dict(os.environ, DOCKER_BUILDKIT="1"))
     report = json.loads((destination / "distribution-verification.json").read_text())
     if report["build_id"] != result["build_id"] or report["signing_mode"] != "ephemeral-test-key":

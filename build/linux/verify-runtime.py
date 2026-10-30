@@ -77,7 +77,7 @@ def main():
             archive = packages / item["filename"]
             if sha256(archive) != item["sha256"] or archive.stat().st_size != item["size"]:
                 raise ValueError("package digest/size mismatch")
-            if item["kind"] in ("runtime", "redis"):
+            if item["kind"] in ("runtime", "redis", "xlswriter"):
                 # A path containing spaces exercises runtime/INI path handling.
                 dest = root / (item["kind"] + " relocated")
                 extract_archive(archive, dest)
@@ -90,7 +90,7 @@ def main():
             raise ValueError("PHP identity mismatch")
         if sha256(php) != result["php_binary_sha256"]:
             raise ValueError("PHP binary differs from build receipt")
-        for elf in [php, runtime / "sbin/php-fpm", *runtime.glob("ext/*.so"), extracted["redis"] / "redis.so"]:
+        for elf in [php, runtime / "sbin/php-fpm", *runtime.glob("ext/*.so"), extracted["redis"] / "redis.so", extracted["xlswriter"] / "xlswriter.so"]:
             linked = output(["ldd", elf], stderr=subprocess.STDOUT)
             if "not found" in linked or "/work/" in linked or "/opt/phpm-build-prefix" in linked:
                 raise ValueError(f"unresolved/build-directory library dependency: {elf}")
@@ -128,11 +128,16 @@ def main():
         redis = extracted["redis"] / "redis.so"
         command("ext", "import", f"redis@{result['recipe']['redis']['version']}",
                 "--file", redis, "--sha256", sha256(redis))
+        xlswriter = extracted["xlswriter"] / "xlswriter.so"
+        command("ext", "import", f"xlswriter@{result['recipe']['xlswriter']['version']}",
+                "--file", xlswriter, "--sha256", sha256(xlswriter))
+        checks.append("separate-xlswriter-import")
         # ext import populates the store; declare the imported module separately.
         selected = json.loads(command("info"))
         extensions = {item["name"]: item["version"] for item in selected["extensions"]}
         extensions["redis"] = result["recipe"]["redis"]["version"]
         extensions["opcache"] = result["php_version"]
+        extensions["xlswriter"] = result["recipe"]["xlswriter"]["version"]
         # JSON is valid YAML; this is an owned fixture, not an edit of a user file.
         write_json(project / "phpm.yaml", {"schema": 1, "php": minor, "runtime": selected["runtime"]["id"],
                    "extensions": extensions, "ini": {"memory_limit": "192M"}})
@@ -154,6 +159,13 @@ def main():
         if isolated != [False, "256M"] or php_code("echo ini_get('memory_limit');") != "192M":
             raise ValueError("project extension/INI isolation failed")
         checks.append("two-project-extension-and-ini-isolation")
+
+        workbook = root / "workbooks"
+        workbook.mkdir()
+        data = php_code(r"$c=['path'=>$argv[1]];$w=new \Vtiful\Kernel\Excel($c);$w->fileName('check.xlsx')->header(['name','value'])->data([['phpm',42]])->output();$r=new \Vtiful\Kernel\Excel($c);echo json_encode($r->openFile('check.xlsx')->openSheet()->getSheetData());", workbook)
+        if json.loads(data) != [["name", "value"], ["phpm", 42]]:
+            raise ValueError("xlswriter write/read data mismatch")
+        checks.append("xlswriter-write-read-roundtrip")
 
         socket_path = root / "redis.sock"
         with service(["redis-server", "--port", "0", "--unixsocket", socket_path,
@@ -191,7 +203,7 @@ def main():
 
         write_json(project / "composer.json", {"name": "phpm/source-build-test", "version": "1.0.0",
                    "require": {"php": "^" + minor, **{f"ext-{name}": "*" for name in
-                               ("json", "curl", "openssl", "mbstring", "pdo_mysql", "redis", "zip")}}})
+                               ("json", "curl", "openssl", "mbstring", "pdo_mysql", "redis", "xlswriter", "zip")}}})
         command("ext", "check")
         command("ext", "install", "--missing")
         command("composer", "--version")
@@ -201,7 +213,7 @@ def main():
         imported = Path(php_code("echo PHP_BINARY;")).parent.parent
         ini = Path(env["PHPM_HOME"]) / "environments" / current["id"] / "php.ini"
         request = root / "index.php"
-        request.write_text("<?php echo json_encode(['sapi'=>PHP_SAPI,'redis'=>extension_loaded('redis'),'memory'=>ini_get('memory_limit')]);")
+        request.write_text("<?php echo json_encode(['sapi'=>PHP_SAPI,'redis'=>extension_loaded('redis'),'xlswriter'=>extension_loaded('xlswriter'),'memory'=>ini_get('memory_limit')]);")
         with socket.socket() as reservation:
             reservation.bind(("127.0.0.1", 0))
             port = reservation.getsockname()[1]
@@ -213,9 +225,9 @@ def main():
                                REQUEST_URI="/index.php", QUERY_STRING="", CONTENT_LENGTH="0",
                                GATEWAY_INTERFACE="CGI/1.1", SERVER_PROTOCOL="HTTP/1.1", REDIRECT_STATUS="200")
             response = output(["cgi-fcgi", "-bind", "-connect", f"127.0.0.1:{port}"], env=request_env, timeout=15)
-            if json.loads(response.split("\n\n", 1)[1]) != {"sapi": "fpm-fcgi", "redis": True, "memory": "192M"}:
+            if json.loads(response.split("\n\n", 1)[1]) != {"sapi": "fpm-fcgi", "redis": True, "xlswriter": True, "memory": "192M"}:
                 raise ValueError("FPM request did not use the project extension environment")
-        checks.append("non-root-fpm-request-with-project-extensions")
+        checks += ["non-root-fpm-request-with-project-extensions", "xlswriter-fpm-loading"]
 
         # Model two payload revisions, not two distinct upstream PHP versions.
         before = {name: (project / name).read_bytes() for name in ("phpm.yaml", "phpm.lock")}
@@ -228,6 +240,8 @@ def main():
                             if json.loads(path.read_text())["id"] != current["runtime"]["id"])
         command("ext", "import", f"redis@{result['recipe']['redis']['version']}",
                 "--file", redis, "--runtime", alternate_id, "--sha256", sha256(redis))
+        command("ext", "import", f"xlswriter@{result['recipe']['xlswriter']['version']}",
+                "--file", xlswriter, "--runtime", alternate_id, "--sha256", sha256(xlswriter))
         command("php", "upgrade", "--runtime", alternate_id)
         command("verify", "--candidate")
         candidate = json.loads(command("info", "--candidate"))

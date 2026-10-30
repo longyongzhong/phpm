@@ -71,7 +71,7 @@ populates the store. Online downloads currently support official Windows x64 PEC
 archives; runtime-bundled modules can also be enabled. No system PHP is changed.
 Activation/rollback affect future launches only; service restarts stay manual.
 Linux downloads use the community StaticPHP common preset with built-in modules.
-Explicit --source uses a registered signed catalog; Debian 13 x64 NTS only.
+Explicit --source uses a registered signed catalog; Debian 12/13 x64 NTS targets.
 Linux/macOS automatic compilation, PIE integration, FPM and deployment are not
 implemented in this development release. See README.md for the support matrix.
 `

@@ -106,6 +106,18 @@ def maintainer_tool(directory):
     return result
 
 
+def build_directories(directory):
+    """The release may add a Debian 12 pair without replacing the existing pair."""
+    inputs = directory / "inputs"
+    roles = {path.name for path in inputs.iterdir()}
+    allowed = {"base", "target"}
+    if roles == allowed | {"debian12-base", "debian12-target"}:
+        allowed = roles
+    if roles != allowed or any(not (inputs / role).is_dir() or (inputs / role).is_symlink() for role in roles):
+        raise ValueError("release requires a complete base/target pair and optional complete Debian 12 pair")
+    return [inputs / role for role in sorted(roles)]
+
+
 def sign(args):
     directory = args.input.resolve()
     request = inspect_materials(directory, args.request_sha256)
@@ -124,12 +136,13 @@ def sign(args):
     if output.is_relative_to(directory) or args.key.resolve().is_relative_to(directory):
         raise ValueError("output/private keys must be outside the unsigned material directory")
     tool = maintainer_tool(directory)
+    builds = build_directories(directory)
     output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix=".phpm-offline-sign-", dir=output.parent) as temporary:
         work = Path(temporary)
         subprocess.run([str(tool), "catalog", "--key", str(args.key.resolve()), "--root", str(args.root.resolve()),
             "--trust", str(args.trust.resolve()), "--sequence", str(args.sequence), "--validity", args.validity,
-            "--output", str(work / "php"), str(directory / "inputs/base"), str(directory / "inputs/target")], check=True)
+            "--output", str(work / "php"), *map(str, builds)], check=True)
         subprocess.run([str(tool), "clients", "--bundle", str(work / "php"), "--root", str(args.root.resolve()),
             "--key", str(args.key.resolve()), "--version", request["version"], "--commit", request["commit"],
             "--linux", str(directory / "clients/linux-amd64/phpm"), "--windows", str(directory / "clients/windows-amd64/phpm.exe"),

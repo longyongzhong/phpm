@@ -1,11 +1,12 @@
 ARG BASE_IMAGE
 FROM ${BASE_IMAGE} AS verify
 ARG APT_SNAPSHOT
+ARG DEBIAN_SUITE
 ENV DEBIAN_FRONTEND=noninteractive
 COPY runtime-packages.txt /tmp/runtime-packages.txt
-RUN test -n "$APT_SNAPSHOT" \
+RUN test -n "$APT_SNAPSHOT" && { test "$DEBIAN_SUITE" = bookworm || test "$DEBIAN_SUITE" = trixie; } \
  && printf '#!/bin/sh\nexit 101\n' > /usr/sbin/policy-rc.d && chmod 755 /usr/sbin/policy-rc.d \
- && printf 'Types: deb\nURIs: http://snapshot.debian.org/archive/debian/%s/\nSuites: trixie trixie-updates\nComponents: main\nSigned-By: /usr/share/keyrings/debian-archive-keyring.gpg\nCheck-Valid-Until: no\n\nTypes: deb\nURIs: http://snapshot.debian.org/archive/debian-security/%s/\nSuites: trixie-security\nComponents: main\nSigned-By: /usr/share/keyrings/debian-archive-keyring.gpg\nCheck-Valid-Until: no\n' "$APT_SNAPSHOT" "$APT_SNAPSHOT" > /etc/apt/sources.list.d/debian.sources \
+ && printf 'Types: deb\nURIs: http://snapshot.debian.org/archive/debian/%s/\nSuites: %s %s-updates\nComponents: main\nSigned-By: /usr/share/keyrings/debian-archive-keyring.gpg\nCheck-Valid-Until: no\n\nTypes: deb\nURIs: http://snapshot.debian.org/archive/debian-security/%s/\nSuites: %s-security\nComponents: main\nSigned-By: /usr/share/keyrings/debian-archive-keyring.gpg\nCheck-Valid-Until: no\n' "$APT_SNAPSHOT" "$DEBIAN_SUITE" "$DEBIAN_SUITE" "$APT_SNAPSHOT" "$DEBIAN_SUITE" > /etc/apt/sources.list.d/debian.sources \
  && apt-get update \
  && xargs -r apt-get install -y --no-install-recommends < /tmp/runtime-packages.txt \
  && rm -rf /var/lib/apt/lists/* \

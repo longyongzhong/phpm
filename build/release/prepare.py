@@ -21,6 +21,11 @@ def run(args, **kwargs):
 def prepare(args):
     if not VERSION.fullmatch(args.version) or len(args.version) > 64:
         raise ValueError("invalid candidate version")
+    inputs = [("base", args.base), ("target", args.target)]
+    if bool(args.debian12_base) != bool(args.debian12_target):
+        raise ValueError("Debian 12 builds must be supplied as an 8.4/8.5 pair")
+    if args.debian12_base:
+        inputs += [("debian12-base", args.debian12_base), ("debian12-target", args.debian12_target)]
     commit = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=PROJECT, text=True).strip()
     if subprocess.check_output(["git", "status", "--porcelain", "--untracked-files=normal"], cwd=PROJECT, text=True).strip():
         raise ValueError("prepare requires a clean source checkout")
@@ -50,9 +55,9 @@ def prepare(args):
         # signature or private seed from this check is copied to the materials.
         run([tool, "keygen", "--private", work / "check.seed", "--public", work / "check.pub"], stdout=subprocess.DEVNULL)
         run([tool, "catalog", "--key", work / "check.seed", "--sequence", "1", "--validity", "1h",
-             "--output", work / "checked", args.base.resolve(), args.target.resolve()])
+             "--output", work / "checked", *[source.resolve() for _, source in inputs]])
         (work / "check.seed").unlink()
-        for role, source in (("base", args.base), ("target", args.target)):
+        for role, source in inputs:
             report = json.loads((source / "build-result.json").read_text())
             names = ["build-result.json", "sdk-verification.json", "verification/runtime-verification.json"]
             names += [item["filename"] for item in report["artifacts"]]
@@ -70,7 +75,7 @@ def prepare(args):
         shutil.copyfile(Path(__file__).with_name("offline.py"), stage / "offline-sign.py")
         shutil.copyfile(PROJECT / "docs/release-quickstart.zh-CN.md", stage / "OFFLINE-GUIDE.md")
         provenance = json.loads(args.provenance.read_text())
-        if provenance["repository"] != args.repo or len(provenance["source_runs"]) != 2:
+        if provenance["repository"] != args.repo or sorted(item["role"] for item in provenance["source_runs"]) != sorted(role for role, _ in inputs):
             raise ValueError("source provenance does not match the requested repository/build pair")
         request = {"schema": 1, "version": args.version, "commit": commit, "repository": args.repo,
                    "source_runs": provenance["source_runs"], "files": {}}
@@ -96,6 +101,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base", type=Path, required=True)
     parser.add_argument("--target", type=Path, required=True)
+    parser.add_argument("--debian12-base", type=Path)
+    parser.add_argument("--debian12-target", type=Path)
     parser.add_argument("--version", required=True)
     parser.add_argument("--repo", required=True)
     parser.add_argument("--provenance", type=Path, required=True)

@@ -16,6 +16,17 @@ on:
         type: string
         required: true
 
+      debian12_base_run:
+        description: Optional successful Debian 12 PHP 8.4 source run (supply both Debian 12 runs)
+        type: string
+        required: false
+        default: ''
+      debian12_target_run:
+        description: Optional successful Debian 12 PHP 8.5 source run
+        type: string
+        required: false
+        default: ''
+
 permissions:
   contents: read
   actions: read
@@ -48,6 +59,8 @@ jobs:
       version: ${{ inputs.version }}
       base_run: ${{ inputs.base_run }}
       target_run: ${{ inputs.target_run }}
+      debian12_base_run: ${{ inputs.debian12_base_run }}
+      debian12_target_run: ${{ inputs.debian12_target_run }}
 
   sign:
     needs: prepare

@@ -2,13 +2,14 @@
 ARG BASE_IMAGE
 FROM ${BASE_IMAGE} AS builder
 ARG APT_SNAPSHOT
+ARG DEBIAN_SUITE
 ARG BUILD_JOBS=2
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PHPM_BUILD_JOBS=${BUILD_JOBS}
 COPY build-packages.txt /tmp/build-packages.txt
-RUN test -n "$APT_SNAPSHOT" \
+RUN test -n "$APT_SNAPSHOT" && { test "$DEBIAN_SUITE" = bookworm || test "$DEBIAN_SUITE" = trixie; } \
  && printf '#!/bin/sh\nexit 101\n' > /usr/sbin/policy-rc.d && chmod 755 /usr/sbin/policy-rc.d \
- && printf 'Types: deb\nURIs: http://snapshot.debian.org/archive/debian/%s/\nSuites: trixie trixie-updates\nComponents: main\nSigned-By: /usr/share/keyrings/debian-archive-keyring.gpg\nCheck-Valid-Until: no\n\nTypes: deb\nURIs: http://snapshot.debian.org/archive/debian-security/%s/\nSuites: trixie-security\nComponents: main\nSigned-By: /usr/share/keyrings/debian-archive-keyring.gpg\nCheck-Valid-Until: no\n' "$APT_SNAPSHOT" "$APT_SNAPSHOT" > /etc/apt/sources.list.d/debian.sources \
+ && printf 'Types: deb\nURIs: http://snapshot.debian.org/archive/debian/%s/\nSuites: %s %s-updates\nComponents: main\nSigned-By: /usr/share/keyrings/debian-archive-keyring.gpg\nCheck-Valid-Until: no\n\nTypes: deb\nURIs: http://snapshot.debian.org/archive/debian-security/%s/\nSuites: %s-security\nComponents: main\nSigned-By: /usr/share/keyrings/debian-archive-keyring.gpg\nCheck-Valid-Until: no\n' "$APT_SNAPSHOT" "$DEBIAN_SUITE" "$DEBIAN_SUITE" "$APT_SNAPSHOT" "$DEBIAN_SUITE" > /etc/apt/sources.list.d/debian.sources \
  && apt-get update \
  && xargs -r apt-get install -y --no-install-recommends < /tmp/build-packages.txt \
  && rm -rf /var/lib/apt/lists/* \
@@ -23,26 +24,36 @@ RUN --network=none python3 /recipe/assemble.py \
 
 FROM ${BASE_IMAGE} AS runtime-check
 ARG APT_SNAPSHOT
+ARG DEBIAN_SUITE
 ENV DEBIAN_FRONTEND=noninteractive
-COPY runtime-packages.txt /tmp/runtime-packages.txt
+COPY runtime-packages*.txt /tmp/
+RUN if [ "$DEBIAN_SUITE" = bookworm ]; then cp /tmp/runtime-packages-debian12.txt /tmp/runtime-packages.txt; fi
 # These extra packages are test tools; no PHP package, compiler or dev headers.
-RUN test -n "$APT_SNAPSHOT" \
+RUN test -n "$APT_SNAPSHOT" && { test "$DEBIAN_SUITE" = bookworm || test "$DEBIAN_SUITE" = trixie; } \
  && printf '#!/bin/sh\nexit 101\n' > /usr/sbin/policy-rc.d && chmod 755 /usr/sbin/policy-rc.d \
- && printf 'Types: deb\nURIs: http://snapshot.debian.org/archive/debian/%s/\nSuites: trixie trixie-updates\nComponents: main\nSigned-By: /usr/share/keyrings/debian-archive-keyring.gpg\nCheck-Valid-Until: no\n\nTypes: deb\nURIs: http://snapshot.debian.org/archive/debian-security/%s/\nSuites: trixie-security\nComponents: main\nSigned-By: /usr/share/keyrings/debian-archive-keyring.gpg\nCheck-Valid-Until: no\n' "$APT_SNAPSHOT" "$APT_SNAPSHOT" > /etc/apt/sources.list.d/debian.sources \
+ && printf 'Types: deb\nURIs: http://snapshot.debian.org/archive/debian/%s/\nSuites: %s %s-updates\nComponents: main\nSigned-By: /usr/share/keyrings/debian-archive-keyring.gpg\nCheck-Valid-Until: no\n\nTypes: deb\nURIs: http://snapshot.debian.org/archive/debian-security/%s/\nSuites: %s-security\nComponents: main\nSigned-By: /usr/share/keyrings/debian-archive-keyring.gpg\nCheck-Valid-Until: no\n' "$APT_SNAPSHOT" "$DEBIAN_SUITE" "$DEBIAN_SUITE" "$APT_SNAPSHOT" "$DEBIAN_SUITE" > /etc/apt/sources.list.d/debian.sources \
  && apt-get update \
  && xargs -r apt-get install -y --no-install-recommends < /tmp/runtime-packages.txt \
  && apt-get install -y --no-install-recommends python3 openssl redis-server libfcgi-bin \
  && rm -rf /var/lib/apt/lists/* \
- && mkdir /verification && chown 65534:65534 /verification
+ && mkdir /verification /distribution && chown 65534:65534 /verification /distribution
 COPY --from=builder /out/ /packages/
+RUN mkdir /packages/verification && chown 65534:65534 /packages/verification
 COPY --from=builder /work/downloads/composer.phar /fixtures/composer.phar
-COPY common.py verify-runtime.py phpm /verify/
-RUN chmod 755 /verify/phpm
+COPY common.py verify-runtime.py phpm phpm.test /verify/
+RUN chmod 755 /verify/phpm /verify/phpm.test
 USER 65534:65534
 WORKDIR /tmp
-RUN --network=none python3 /verify/verify-runtime.py
+RUN --network=none python3 /verify/verify-runtime.py \
+ && cp /verification/runtime-verification.json /packages/verification/runtime-verification.json
+ENV PHPM_TEST_DEBIAN_PACKAGES=/packages
+ENV PHPM_TEST_CLI_BINARY=/verify/phpm
+ENV PHPM_TEST_COMPOSER=/fixtures/composer.phar
+ENV PHPM_TEST_DISTRIBUTION_OUTPUT=/distribution
+RUN --network=none /verify/phpm.test -test.run '^TestNativeSignedCatalogLifecycle$' -test.v -test.timeout 10m
 
 # Export is dependent on both SDK and fresh-container verification succeeding.
 FROM scratch AS artifacts
 COPY --from=builder /out/ /
 COPY --from=runtime-check /verification/ /verification/
+COPY --from=runtime-check /distribution/distribution-verification.json /verification/distribution-verification.json

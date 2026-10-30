@@ -15,7 +15,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from common import extract_archive, load_recipe, pack_archive, relocate_sdk_script, sha256, verify_inputs
+from common import extract_archive, load_recipe, pack_archive, recipe_filename, relocate_sdk_script, runtime_packages_file, sha256, target_profile, verify_inputs
 
 
 class RecipeTests(unittest.TestCase):
@@ -23,7 +23,7 @@ class RecipeTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
-        for name in ("recipe.json", "configure-flags.txt", "build-packages.txt", "runtime-packages.txt"):
+        for name in ("recipe.json", "configure-flags.txt", "build-packages.txt", "runtime-packages.txt", "runtime-packages-debian12.txt"):
             shutil.copyfile(ROOT / name, self.root / name)
         shutil.copytree(ROOT / "keys", self.root / "keys")
         shutil.copytree(ROOT / "recipes", self.root / "recipes")
@@ -41,6 +41,21 @@ class RecipeTests(unittest.TestCase):
         other = load_recipe(self.root, "recipes/php-8.5.json")
         self.assertEqual(other["php"]["version"], "8.5.12")
         self.assertEqual(other["php"]["key"], "keys/php-8.5.asc")
+
+    def test_both_debian_targets_bind_image_and_runtime_dependencies(self):
+        for debian in ("12", "13"):
+            for php in ("8.4", "8.5"):
+                recipe = load_recipe(self.root, recipe_filename(php, debian))
+                self.assertEqual(target_profile(recipe)[0], debian)
+                self.assertTrue(recipe["base_image"].startswith(f"debian:{debian}-slim@sha256:"))
+                self.assertEqual(recipe["xlswriter"]["version"], "3.0.0")
+                packages = (self.root / runtime_packages_file(recipe)).read_text()
+                self.assertIn("libssl3t64" if debian == "13" else "libssl3\n", packages)
+        recipe = json.loads((self.root / "recipe.json").read_text())
+        recipe["target"] = "debian12-x86_64-nts"
+        (self.root / "recipe.json").write_text(json.dumps(recipe))
+        with self.assertRaises(ValueError):
+            load_recipe(self.root)  # A Debian 13 image cannot build the Debian 12 target.
 
     def test_recipe_version_cannot_use_another_series_key(self):
         self.change(("php", "key"), "keys/php-8.5.asc")

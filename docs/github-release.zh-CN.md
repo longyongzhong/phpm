@@ -29,6 +29,10 @@ Get-Content "$env:USERPROFILE\phpm-signing\publisher.seed" -Raw | Set-Clipboard
 
 ## 以后每次发布
 
+包含 Debian 12 时额外填写成对的 `debian12_base_run` / `debian12_target_run`；
+原有 `base_run` / `target_run` 对应 Debian 13。四套产物进入同一个签名目录，
+客户端按本机系统匹配。详见 [预编译扩展说明](precompiled-extensions.zh-CN.md)。
+
 告诉我候选版本，例如 `0.1.0-rc.1`。我检查代码和已有阶段 A 构建，运行 **GitHub signed release draft**，填写版本及两版阶段 A 构建运行 ID。工作流：
 
 1. 校验 `main` 分支及已提交的公开根授权。
