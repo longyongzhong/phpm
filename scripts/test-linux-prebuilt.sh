@@ -18,6 +18,11 @@ fi
 bundle_dir=$(CDPATH= cd -P "$(dirname "$0")" && pwd)
 cd "$bundle_dir"
 sha256sum -c SHA256SUMS
+if [ ! -f "$bundle_dir/fixtures/root-key.pub" ]; then
+    printf '%s\n' 'Bundle is missing fixtures/root-key.pub; include the reviewed public release root and its SHA256SUMS entry.' >&2
+    exit 2
+fi
+export PHPM_TEST_RELEASE_ROOT="$bundle_dir/fixtures/root-key.pub"
 if [ ! -x ./phpm ] || [ ! -x ./phpm.test ]; then
     printf '%s\n' 'Run chmod +x phpm phpm.test in the extracted bundle directory first.' >&2
     exit 2

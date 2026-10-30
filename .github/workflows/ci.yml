@@ -72,10 +72,11 @@ jobs:
           go test -c -o "$stage/phpm.test" ./internal/phpm
           cp scripts/test-linux-prebuilt.sh "$stage/run-tests.sh"
           mkdir "$stage/fixtures"
+          cp release/trust/root-key.pub "$stage/fixtures/root-key.pub"
           curl -fSL --retry 2 https://getcomposer.org/download/2.10.3/composer.phar -o "$stage/fixtures/composer.phar"
           cd "$stage"
           printf '%s\n' '7a2d379d5b8ffdaa028580ef26494c36d2feef4b178d3dd1473a4dbc5e17c8d6  fixtures/composer.phar' | sha256sum -c -
-          sha256sum phpm phpm.test run-tests.sh fixtures/composer.phar > SHA256SUMS
+          sha256sum phpm phpm.test run-tests.sh fixtures/composer.phar fixtures/root-key.pub > SHA256SUMS
           sh run-tests.sh --bootstrap
 
   signed-default-bootstrap:

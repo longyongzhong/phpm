@@ -56,7 +56,11 @@ func TestUpgradeKeepsExistingProviderUnlessExplicitlySelected(t *testing.T) {
 }
 
 func TestBuiltinRootMatchesReviewedReleaseTrust(t *testing.T) {
-	data, err := os.ReadFile("../../release/trust/root-key.pub")
+	path := os.Getenv("PHPM_TEST_RELEASE_ROOT")
+	if path == "" {
+		path = "../../release/trust/root-key.pub"
+	}
+	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
