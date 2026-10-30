@@ -845,12 +845,14 @@ xlswriter and bundled libxlsx/Expat are retained.
 [Formal signed draft run 40999599815](https://github.com/longyongzhong/phpm/actions/runs/40999599815)
 passed configuration, four-input preparation, disposable-key offline/GitHub
 signing roundtrips, Environment publisher signing, and post-upload verification.
-Release `428636173`, intended tag `v0.1.0-rc.2`, remains **draft prerelease**:
-[review draft](https://github.com/longyongzhong/phpm/releases/tag/untagged-9936c630bbe730508a93).
-At final metadata review its tag had changed to
-`untagged-9936c630bbe730508a93` while source and assets remained the same. No
-agent PATCH was made after that mismatch; restoring the intended tag and editing
-the draft notes are pending operator clarification to preserve possible UI edits.
+Release `428636173`, tag `v0.1.0-rc.2`, remains **draft prerelease**:
+[review draft](https://github.com/longyongzhong/phpm/releases/tag/untagged-14234a865c5d6f97d6a3).
+After the operator confirmed no concurrent editing and explicitly authorized tag
+restoration, the draft tag and reviewed release notes were updated. Before the
+PATCH, root/catalog/client signatures and existing tag references were checked;
+afterward all 39 asset names, sizes and digests, exact source, notes and draft
+status were reverified. The draft's `html_url` still uses GitHub's `untagged-...`
+route; its API `tag_name` is `v0.1.0-rc.2`. It has not been publicly issued.
 It has 39 assets: 37 signed-manifest files plus `clients.json` and its signature.
 Catalog sequence is `40999599815`, authorization version 1, using the same pinned
 operator root `b9aaa6269e68f95ea18147d09c043ca9c8ae332903e0bc04b23c34ad98e35d32`.
