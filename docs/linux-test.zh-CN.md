@@ -1,7 +1,7 @@
 # Linux 测试：0.1.0-rc.1
 
-本文保留 rc.1 的测试范围。新增 Debian 12 与 xlswriter 的 rc.2 已完成签名草稿，
-尚未公开；见 [rc.2 测试指南](linux-test-rc2.zh-CN.md)，其中下载命令需公开后使用。
+本文保留 rc.1 的测试范围。新增 Debian 12 与 xlswriter 的 rc.2 已公开，
+新测试请使用 [rc.2 测试指南](linux-test-rc2.zh-CN.md)。
 
 [公开预发布版本](https://github.com/longyongzhong/phpm/releases/tag/v0.1.0-rc.1)。
 

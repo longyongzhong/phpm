@@ -1,6 +1,6 @@
 # Debian 12/13 测试：0.1.0-rc.2
 
-当前 rc.2 是未公开草稿。下面的公开下载命令须等维护者公开该版本后执行；草稿资产不能匿名下载。
+[rc.2 已公开为预发布版本](https://github.com/longyongzhong/phpm/releases/tag/v0.1.0-rc.2)，可直接使用下面的公开下载命令。
 
 适用 Debian 12 x86_64 / glibc 2.36 或 Debian 13 x86_64 / glibc 2.41，不适用 iStoreOS/OpenWrt。两套包分别构建，客户端自动选择匹配目标。客户端仍需升级到 rc.2；rc.1 不认识 Debian 12 目标。
 

@@ -845,14 +845,15 @@ xlswriter and bundled libxlsx/Expat are retained.
 [Formal signed draft run 40999599815](https://github.com/longyongzhong/phpm/actions/runs/40999599815)
 passed configuration, four-input preparation, disposable-key offline/GitHub
 signing roundtrips, Environment publisher signing, and post-upload verification.
-Release `428636173`, tag `v0.1.0-rc.2`, remains **draft prerelease**:
-[review draft](https://github.com/longyongzhong/phpm/releases/tag/untagged-14234a865c5d6f97d6a3).
+Release `428636173`, tag `v0.1.0-rc.2`, was initially retained as a **draft
+prerelease** for review.
 After the operator confirmed no concurrent editing and explicitly authorized tag
 restoration, the draft tag and reviewed release notes were updated. Before the
 PATCH, root/catalog/client signatures and existing tag references were checked;
 afterward all 39 asset names, sizes and digests, exact source, notes and draft
 status were reverified. The draft's `html_url` still uses GitHub's `untagged-...`
-route; its API `tag_name` is `v0.1.0-rc.2`. It has not been publicly issued.
+route; its API `tag_name` was verified as `v0.1.0-rc.2`. It remained unpublished
+until the separately authorized issuance recorded below.
 It has 39 assets: 37 signed-manifest files plus `clients.json` and its signature.
 Catalog sequence is `40999599815`, authorization version 1, using the same pinned
 operator root `b9aaa6269e68f95ea18147d09c043ca9c8ae332903e0bc04b23c34ad98e35d32`.
@@ -874,5 +875,29 @@ older Debian 13/Redis pair has not been repeated with these new packages.
 Operator Debian 12 server testing, business acceptance, sustained load and
 production service switching remain outstanding. Xdebug, other distributions/
 architectures, and automatic client-side compilation remain future work. rc.1
-assets were not changed. The rc.2 guide explicitly requires public issuance before
-anonymous download commands can be used.
+assets were not changed.
+
+## rc.2 public prerelease issuance (2026-10-30)
+
+The operator explicitly requested public issuance for Linux testing. Immediately
+before publication, the pinned root authorization, catalog/client role signatures,
+version/source, four build bindings, complete asset names/sizes/SHA-256 digests and
+existing tag reference were verified again. Release `428636173` was published at
+`2026-10-30T12:20:56Z` as [v0.1.0-rc.2](https://github.com/longyongzhong/phpm/releases/tag/v0.1.0-rc.2),
+retaining `prerelease: true` and `make_latest: false`. Its 39 assets were not replaced.
+The release body was updated to describe the public candidate and its limitations.
+
+Authenticated post-publication checks and an independent unauthenticated public
+API request both confirmed the version, exact source, public/prerelease status
+and all 39 asset names, sizes and digests. The Debian 12/13 guide now uses public
+download links and an isolated PHPM_HOME/project, without changing global PATH
+or services. Server-side and business-project execution remain operator tests;
+publication does not establish those results.
+
+A post-publication unauthenticated Linux client archive download from the
+maintainer's Windows network encountered connection resets/timeouts, including
+bounded retries. No completed anonymous archive download or new server execution
+is claimed from that check; the public API asset digests and earlier signed-client
+build/bootstrap acceptance remain independently established. The guide's curl
+download supports resuming an interrupted local transfer before full SHA-256
+verification and extraction.

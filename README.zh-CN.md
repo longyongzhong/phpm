@@ -5,8 +5,9 @@ Linux 官方源码构建已在 GitHub Actions 完成首次验证，面向 Debian
 操作和范围见 [构建说明](build/linux/README.zh-CN.md)。阶段 B 另提供显式可信源安装、
 签名目录和锁文件精确恢复，见 [分发与安装](docs/distribution.zh-CN.md)。
 默认下载源保持不变；正式签名候选版 rc.1 已公开，生产服务部署尚未自动化。
-当前源码正在扩展 Debian 12/13 预编译包和 xlswriter，范围与发布区别见
-[预编译扩展说明](docs/precompiled-extensions.zh-CN.md)。
+Debian 12/13 预编译包和 xlswriter 已纳入公开候选版 rc.2，范围见
+[预编译扩展说明](docs/precompiled-extensions.zh-CN.md)，安装步骤见
+[Debian 12/13 测试指南](docs/linux-test-rc2.zh-CN.md)。
 
 阶段 C 已在独立 Debian VM 中完成真实 8.4.27 → 8.5.12 → 回退，验证 MySQL、Redis、
 FPM 与旧进程保持原版本；范围和运行方式见 [VM 验收说明](build/linux/vm/README.zh-CN.md)。
