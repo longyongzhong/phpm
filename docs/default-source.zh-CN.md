@@ -1,6 +1,6 @@
 # 默认使用 PHPM 自建签名源
 
-当前源码将 Linux 的默认 PHP 下载改为 PHPM 自建签名源，并已生成 rc.3 签名草稿，可在 [Releases 页面](https://github.com/longyongzhong/phpm/releases)登录审阅，尚未公开。这是客户端行为变更，已发布 rc.2 仍需显式注册源；它不会因服务器配置变更自动获得新功能。
+Linux 的默认 PHP 下载已改为 PHPM 自建签名源，已公开 [rc.3 预发布版](https://github.com/longyongzhong/phpm/releases/tag/v0.1.0-rc.3)。这是客户端行为变更，需换用 rc.3 客户端；rc.2 仍需显式注册源，不会因服务器配置变更自动获得新功能。
 
 rc.3 是客户端更新，复用 rc.2 已验证的 PHP/扩展构建，因此内置 PHP 目录仍指向 rc.2；客户端版本与 PHP 包目录版本相互独立。
 
@@ -51,4 +51,4 @@ iStoreOS/OpenWrt 不支持自建 Debian 包；可显式尝试 StaticPHP 或导�
 
 CI 保留显式 StaticPHP 的原有 bootstrap，新增 Debian 12/13 全新容器默认来源验收：无系统 PHP/编译器、非 root、无手工注册，实际下载验证生产签名元数据和包，执行 Excel 读写、Redis 加载、冻结安装、8.4 → 8.5 候选、激活与精确文件回退。[CI 41075574189](https://github.com/longyongzhong/phpm/actions/runs/41075574189) 六项全部通过；详细证据见 [验收记录](validation.md#linux-default-signed-source-2026-10-30)。
 
-公开 rc.3 后可从其 Assets 下载 `phpm-0.1.0-rc.3-linux-amd64.tar.gz`。签名清单中的 SHA-256 为 `07daa0913b4e15f05a0ec6ad54c898a19d01771e25dc587f94a4d4fa4c7f5170`；草稿状态下不能匿名下载。切换客户端后可在独立 PHPM_HOME 和测试项目中执行上方命令。
+可从 [rc.3 Assets](https://github.com/longyongzhong/phpm/releases/tag/v0.1.0-rc.3) 下载 `phpm-0.1.0-rc.3-linux-amd64.tar.gz`。签名清单中的 SHA-256 为 `07daa0913b4e15f05a0ec6ad54c898a19d01771e25dc587f94a4d4fa4c7f5170`。切换客户端后可在独立 PHPM_HOME 和测试项目中执行上方命令。

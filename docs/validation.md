@@ -957,11 +957,11 @@ roundtrips, Environment signing and exact post-upload asset verification. It
 created draft prerelease `429159006`, version `0.1.0-rc.3`, source
 `426d72bcbb993a492d391aa52e2a84c17e4aae71`, with 39 assets. PHP/SDK/extension
 builds are reused from the previously accepted four rc.2 stage-A runs; client and
-catalog versions are independent. This draft has not been publicly issued.
+catalog versions are independent. This was initially retained as a draft.
 The intended tag `v0.1.0-rc.3` and release notes were normalized after checking
 existing tag references; the draft state, exact source and all 39 asset names,
-sizes and digests were independently rechecked afterward. The current review URL
-is [rc.3 draft](https://github.com/longyongzhong/phpm/releases/tag/untagged-bad36713f06b8b61261a).
+sizes and digests were independently rechecked afterward. The release is now
+[public rc.3](https://github.com/longyongzhong/phpm/releases/tag/v0.1.0-rc.3).
 
 Downloaded rc.3 catalog/client metadata was independently verified against the
 repository-pinned public root and authorization, including all four build pairs,
@@ -974,3 +974,17 @@ The Windows ZIP SHA-256 is
 `8c84ea192a26b0c803657ae9c3a0a8f944c228015544c0622482f96c1a6766b3`;
 its separate maintainer-side download encountered HTTPS timeouts and installation
 was not completed. No formal private seed bytes were read by the agent.
+
+### Public rc.3 issuance (2026-11-01)
+
+On the user's explicit instruction, release `429159006` was published at
+`2026-10-31T18:10:27Z` (2026-11-01 02:10:27 Asia/Shanghai) as public prerelease
+`v0.1.0-rc.3`, without marking it latest. Immediately before publication, root,
+authorization, catalog/client signatures and all four build bindings were
+reverified. The tag/source and all 39 uploaded asset names, sizes and SHA-256
+digests matched the signed manifest before and after publication. An independent
+unauthenticated public GitHub API read also matched the exact release identity,
+source, public prerelease state, release notes and all 39 asset records. Existing
+release assets were not replaced. This check did not download or execute a fresh
+public client archive; earlier CI acceptance and maintainer download limitations
+above remain unchanged.

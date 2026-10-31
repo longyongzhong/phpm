@@ -5,7 +5,8 @@ Linux 官方源码构建已在 GitHub Actions 完成首次验证，面向 Debian
 操作和范围见 [构建说明](build/linux/README.zh-CN.md)。阶段 B 另提供显式可信源安装、
 签名目录和锁文件精确恢复，见 [分发与安装](docs/distribution.zh-CN.md)。
 当前源码将 Linux 默认来源改为内置根公钥验证的 PHPM 自建签名源，
-使用方式见 [默认来源说明](docs/default-source.zh-CN.md)。此变更需要新版客户端；
+使用方式见 [默认来源说明](docs/default-source.zh-CN.md)。此变更已随
+[rc.3 预发布版](https://github.com/longyongzhong/phpm/releases/tag/v0.1.0-rc.3)公开，需要更新客户端；
 已发布 rc.2 仍使用原来的显式注册流程。生产服务部署尚未自动化。
 Debian 12/13 预编译包和 xlswriter 已纳入公开候选版 rc.2，范围见
 [预编译扩展说明](docs/precompiled-extensions.zh-CN.md)，安装步骤见
