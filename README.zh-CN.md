@@ -2,11 +2,48 @@
 
 [English](README.md)
 
-为每个项目选择 PHP 版本、安装原生扩展、运行 Composer，并在测试后切换或回退 PHP。
+为每个项目选择 PHP CLI 版本、安装原生扩展、运行 Composer，并在测试后切换或回退 PHP。
 运行时与扩展存放在共享仓库，项目通过 `phpm.yaml` 和 `phpm.lock` 固定自己的环境。
 通过 `phpm exec` 启动的程序使用项目 PHP，不修改系统 PHP 或已有服务。
 
 当前可下载版本：[**0.1.0-rc.3**](https://github.com/longyongzhong/phpm/releases/tag/v0.1.0-rc.3)，属于预发布版，供功能验收。
+
+**当前仅支持 PHP CLI 环境管理**，适用于命令行脚本、Composer 和通过 CLI 启动的程序。
+尚不提供 PHP-FPM 管理、Nginx/Apache 配置或网站部署功能。
+Debian 自建包虽附带 PHP-FPM 并完成过运行测试，FPM 的手动接入仍不属于当前工具的管理范围。
+
+## 工作原理
+
+PHPM 将“取得 PHP 和扩展”与“为项目选择环境”分开处理：
+
+1. **构建集中存储，项目分别选择。** 下载或导入的 PHP 与扩展保存在 `~/.phpm`
+   （可用 `PHPM_HOME` 修改）。多个项目可以共享同一份兼容构建，同时使用不同的
+   PHP 版本、扩展组合和 INI 设置，无需为每个项目复制完整 PHP。
+2. **配置声明需求，锁文件固定结果。** `phpm.yaml` 声明 PHP、扩展和 INI 设置；
+   `phpm.lock` 记录具体构建、版本与摘要。`phpm install` 复用匹配的锁定结果，
+   或从已存储的产物中解析需求，校验文件并生成项目专用的 PHP 配置。
+   扩展必须与选中的 PHP 构建兼容，不能只凭扩展名称或版本复用 DLL/SO。
+3. **通过启动命令使用项目环境。** `phpm exec -- php ...` 先校验环境，再使用
+   选定的 PHP 和配置启动程序；`phpm composer ...` 同样使用项目 PHP。
+   `ext install` 成功后更新当前项目的声明和锁文件，不会替其他项目启用扩展。
+   直接输入 `php` 仍由终端原来的 PATH 决定。
+4. **升级先准备，再切换。** `phpm php upgrade` 将目标 PHP 与匹配扩展组成候选环境，
+   当前项目继续使用旧环境。通过 `--candidate` 测试后，再用 `activate` 切换；
+   `rollback` 可恢复保留的项目配置和锁文件。已有进程继续使用启动时的 PHP，
+   需要另行重启；回滚不会撤销代码、数据库或应用数据变更。
+
+```mermaid
+flowchart LR
+    A["phpm.yaml + phpm.lock<br/>项目需求与锁定构建"] --> C["phpm install<br/>校验并组装"]
+    B["共享仓库 PHPM_HOME<br/>PHP 与兼容扩展"] --> C
+    C --> D["项目环境<br/>选定 PHP、扩展与 INI"]
+    D --> E["phpm exec / phpm composer"]
+    E --> F["项目程序"]
+```
+
+可以把它理解为 PHP 的项目级虚拟环境：隔离版本选择与配置，宿主系统库、
+应用文件和数据库访问仍由操作系统及应用管理。它不提供容器级隔离。
+构建匹配、锁文件和校验流程详见 [架构说明](docs/architecture.md)。
 
 ## 快速开始
 

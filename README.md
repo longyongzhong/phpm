@@ -2,7 +2,7 @@
 
 [简体中文](README.zh-CN.md)
 
-Choose PHP per project, install native extensions, run Composer, and test PHP
+Choose PHP CLI per project, install native extensions, run Composer, and test PHP
 upgrades before activation or rollback. Runtimes and extensions share an artifact
 store; `phpm.yaml` and `phpm.lock` select each project's environment.
 Commands launched through `phpm exec` use that environment without changing
@@ -10,6 +10,53 @@ system PHP or existing services.
 
 Download [**0.1.0-rc.3**](https://github.com/longyongzhong/phpm/releases/tag/v0.1.0-rc.3),
 a public prerelease for functional evaluation.
+
+**Currently, PHPM supports PHP CLI environment management only**: command-line
+scripts, Composer and applications launched through CLI. PHP-FPM management,
+Nginx/Apache configuration and website deployment are not provided. Debian packages
+include PHP-FPM and have passed runtime tests, but manual FPM integration remains
+outside the tool's current management scope.
+
+## How it works
+
+PHPM separates acquiring PHP and extensions from selecting an environment for a project:
+
+1. **Store builds once, select them per project.** Downloaded or imported runtimes
+   and extensions live in `~/.phpm`, configurable with `PHPM_HOME`. Projects can
+   share compatible builds while choosing different PHP versions, extension sets
+   and INI settings, without copying a full PHP distribution into each project.
+2. **Declare requirements and lock exact builds.** `phpm.yaml` declares PHP,
+   extensions and INI settings; `phpm.lock` records exact builds, versions and
+   digests. `phpm install` reuses a matching lock or resolves stored artifacts,
+   verifies their files and generates project-specific PHP configuration.
+   Extensions must match the selected PHP build; an extension name or version
+   alone is insufficient to reuse a DLL/SO.
+3. **Launch with the project environment.** `phpm exec -- php ...` verifies the
+   environment and launches the selected PHP with its generated configuration.
+   `phpm composer ...` also uses project PHP. A successful `ext install` updates
+   only the current project's requirements and lock. A plain `php` command still
+   follows your terminal's original PATH.
+4. **Prepare upgrades before switching.** `phpm php upgrade` assembles a candidate
+   from the target PHP and matching extensions while the current environment
+   stays selected. Test with `--candidate`, then switch with `activate`.
+   `rollback` restores retained project configuration and lock files. Running
+   processes keep their original PHP until restarted separately; rollback does
+   not undo code, database or application-data changes.
+
+```mermaid
+flowchart LR
+    A["phpm.yaml + phpm.lock<br/>Requirements and locked builds"] --> C["phpm install<br/>Verify and assemble"]
+    B["Shared store: PHPM_HOME<br/>PHP and compatible extensions"] --> C
+    C --> D["Project environment<br/>Selected PHP, extensions and INI"]
+    D --> E["phpm exec / phpm composer"]
+    E --> F["Project application"]
+```
+
+Think of it as a project-level PHP virtual environment: version selection and
+configuration are isolated, while host libraries, application files and database
+access remain managed by the operating system and application. It does not provide
+container-level isolation. See the [architecture guide](docs/architecture.md) for
+build matching, locking and verification details.
 
 ## Quick start
 
