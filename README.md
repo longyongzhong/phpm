@@ -1,29 +1,135 @@
-# PHPM
+# PHPM — PHP Runtime & Extension Manager
 
 [简体中文](README.zh-CN.md)
 
-PHPM builds project-specific PHP CLI environments from shared PHP runtimes,
-native extension artifacts and generated configuration. It does not change the
-system PHP installation, global PATH or services.
+Choose PHP per project, install native extensions, run Composer, and test PHP
+upgrades before activation or rollback. Runtimes and extensions share an artifact
+store; `phpm.yaml` and `phpm.lock` select each project's environment.
+Commands launched through `phpm exec` use that environment without changing
+system PHP or existing services.
 
-This is an initial **0.1.0-dev** implementation, not a production deployment tool.
+Download [**0.1.0-rc.3**](https://github.com/longyongzhong/phpm/releases/tag/v0.1.0-rc.3),
+a public prerelease for functional evaluation.
 
-The first signed candidate [0.1.0-rc.1](https://github.com/longyongzhong/phpm/releases/tag/v0.1.0-rc.1)
-is available. See the [Linux testing guide](docs/linux-test.zh-CN.md) for downloads
-and the distinction between the Linux client and Debian-13-only PHP packages.
+## Quick start
 
-Current source adds separate Debian 12/13 recipes and precompiled xlswriter;
-see the [precompiled extension milestone](docs/precompiled-extensions.zh-CN.md).
-All four combinations passed native container acceptance and are included in
-[published rc.2](https://github.com/longyongzhong/phpm/releases/tag/v0.1.0-rc.2).
-Use the [Debian 12/13 testing guide](docs/linux-test-rc2.zh-CN.md); rc.1 assets
-remain unchanged.
+**Download PHPM → install PHP → initialize a project → install extensions → run PHP.**
+The PHPM client does not need PHP or Go preinstalled.
 
-Current source changes Linux defaults to the built-in signed PHPM source;
-[default-source instructions](docs/default-source.zh-CN.md) describe the pinned
-root/catalog, explicit StaticPHP option and upgrade compatibility. This requires
-a new client; [rc.3 is publicly available](https://github.com/longyongzhong/phpm/releases/tag/v0.1.0-rc.3), and rc.2
-retains its explicit-source behavior.
+### 1. Download PHPM
+
+| System | Client and default PHP source |
+|---|---|
+| Windows x64 | Windows client; official PHP Windows packages |
+| Debian 12/13 x86_64 | Linux client; PHPM signed packages, no source registration |
+| Other Linux x86_64 | Explicit `--provider staticphp` option; Debian packages are incompatible |
+| macOS / other architectures | No corresponding release client yet; build from source and import compatible PHP |
+
+**Windows PowerShell:** download into a new installation directory, verify SHA-256,
+and extract:
+
+```powershell
+$phpmInstallDir = Join-Path $HOME 'phpm-0.1.0-rc.3'
+New-Item -ItemType Directory -Path $phpmInstallDir -ErrorAction Stop | Out-Null
+Invoke-WebRequest -Uri 'https://github.com/longyongzhong/phpm/releases/download/v0.1.0-rc.3/phpm-0.1.0-rc.3-windows-amd64.zip' -OutFile "$phpmInstallDir\phpm.zip" -ErrorAction Stop
+if ((Get-FileHash "$phpmInstallDir\phpm.zip" -Algorithm SHA256).Hash -ne '8c84ea192a26b0c803657ae9c3a0a8f944c228015544c0622482f96c1a6766b3') { throw 'PHPM SHA-256 mismatch' }
+Expand-Archive -Path "$phpmInstallDir\phpm.zip" -DestinationPath $phpmInstallDir -ErrorAction Stop
+$env:PATH = "$phpmInstallDir;$env:PATH"
+phpm version
+```
+
+**Debian 12/13 x86_64:** prepare the [system runtime libraries](docs/linux-test-rc2.zh-CN.md#准备系统运行库)
+first. These download commands use `curl`, `tar` and `sha256sum`:
+
+```sh
+mkdir -p "$HOME/phpm-0.1.0-rc.3" &&
+cd "$HOME/phpm-0.1.0-rc.3" &&
+curl -fL --retry 3 -o phpm.tar.gz https://github.com/longyongzhong/phpm/releases/download/v0.1.0-rc.3/phpm-0.1.0-rc.3-linux-amd64.tar.gz &&
+printf '%s\n' '07daa0913b4e15f05a0ec6ad54c898a19d01771e25dc587f94a4d4fa4c7f5170  phpm.tar.gz' | sha256sum -c - &&
+tar -xzf phpm.tar.gz &&
+export PATH="$PWD:$PATH" &&
+phpm version
+```
+
+`phpm version` should print `0.1.0-rc.3`. PATH changes above apply only to the
+current terminal. Add the extracted directory to your user PATH for future
+sessions, or invoke the executable by its full path. These SHA-256 pins check the
+specific release archives; see the [signed installation guide](docs/offline-release.zh-CN.md)
+for independent root-authorized client verification.
+
+### 2. Create a project environment
+
+In the same terminal, enter your project directory, or create an empty
+`phpm-demo` directory first. On Windows x64 or Debian 12/13 x86_64:
+
+```sh
+phpm php install 8.4       # download into the shared store
+phpm init --php 8.4       # create phpm.yaml here; skip if already configured
+phpm install             # create phpm.lock and the project environment
+phpm exec -- php -v      # inspect the project's PHP
+phpm verify              # verify integrity and actual PHP loading
+```
+
+`php install` acquires a runtime; `install` assembles the project's environment.
+Run project commands with `phpm exec -- php ...`. A plain `php` command still
+uses your terminal's original PHP selection.
+
+### 3. Install extensions and run PHP
+
+Stay in the project directory. Successful extension installation updates both
+project files automatically; no additional `install` is needed:
+
+```sh
+phpm ext install pdo_mysql    # MySQL PDO driver
+phpm ext install redis       # Redis extension matching the project PHP
+phpm exec -- php --ri redis
+phpm exec -- php -m          # modules actually loaded by this project
+phpm exec -- php your-script.php
+```
+
+Replace `your-script.php` with your own entry point. Debian catalogs also support
+`phpm ext install xlswriter`. Installing an extension updates the current project,
+not every project using PHPM.
+
+### 4. Use an existing Composer project
+
+Initialize the PHP environment above and provide a Composer 2 PHAR compatible
+with the project PHP. PHPM discovers Composer on PATH; otherwise set
+`PHPM_COMPOSER` to a trusted PHAR's absolute path, for example
+`$env:PHPM_COMPOSER = 'D:\tools\composer.phar'` in PowerShell or
+`export PHPM_COMPOSER=/opt/tools/composer.phar` on Linux.
+
+```sh
+phpm ext check               # inspect composer.json / composer.lock requirements
+phpm ext install --missing   # install missing extensions supported by this provider
+phpm composer install        # run Composer with the project PHP
+```
+
+`ext check` returns a nonzero status for missing requirements. `--missing` does
+not compile extensions or fix PHP/existing-extension version conflicts; see
+[Composer integration](#composer-integration). Commit both `phpm.yaml` and `phpm.lock`.
+
+## Common commands
+
+| Task | Command |
+|---|---|
+| Show help | `phpm --help` |
+| List downloadable PHP builds | `phpm php available` |
+| List installed/imported PHP builds | `phpm php list` |
+| Run project PHP | `phpm exec -- php your-script.php` |
+| List stored extension builds | `phpm ext list` |
+| List actually loaded project modules | `phpm exec -- php -m` |
+| Install missing Composer extensions | `phpm ext install --missing` |
+| Run Composer | `phpm composer install` |
+| Verify the current environment | `phpm verify` |
+| Prepare a PHP 8.5 candidate | `phpm php upgrade 8.5` |
+| Inspect/test the candidate | `phpm diff`, `phpm exec --candidate -- php -v` |
+| Activate a tested candidate | `phpm activate CANDIDATE_ID` |
+| Restore the previous environment | `phpm rollback` |
+
+Follow the [complete upgrade workflow](#prepare-test-activate-and-roll-back-php-upgrades)
+before activation. Switching affects future launches; running FPM/workers require
+a separate restart.
 
 ## Current scope
 
@@ -33,67 +139,23 @@ retains its explicit-source behavior.
 | Official PHP download + SHA-256 verification | Implemented | Not implemented |
 | StaticPHP community static PHP download + published SHA-256 | Not used | Explicit `--provider staticphp` on Linux x64 NTS |
 | Import and probe local dynamic extensions | DLL | SO; requires compatible host libraries |
-| `ext install`: online extension installation | Official PECL Windows x64 archives | Bundled modules; matching extensions from signed Debian 12/13 catalogs (published rc.1: Debian 13 Redis) |
+| `ext install`: online extension installation | Official PECL Windows x64 archives | Bundled modules; matching extensions from signed Debian 12/13 catalogs (Redis and xlswriter) |
 | Project YAML, platform lock, immutable environment | Implemented | Implemented |
 | Execute with independent PHP configuration | Implemented | Implemented; Unix launcher uses process replacement |
 | Run Composer with project PHP; inspect declared platform requirements | Implemented; requires compatible Composer 2 PHAR for checks | Implemented; same requirement |
 | Automated PHP/extension source builds or PIE integration | Not implemented | Debian 12/13 x64 build workflow; client-side compilation/PIE not implemented |
 | Signed catalog install and exact locked artifact restoration | Not used | Default Debian 12/13 x64 NTS targets with a client-pinned root; custom sources remain explicit |
 | Prepare/test/activate/rollback project PHP upgrades | Implemented | Signed catalogs, explicit StaticPHP or preimported runtimes; upgrades preserve the current provider |
-| FPM, service restart, production deployment, garbage collection | Not implemented | Not implemented |
+| FPM service management, service restart, production deployment, garbage collection | Not implemented | Not implemented |
 
-Native integration tests and Go vet passed on hosted Windows, macOS and Ubuntu;
-the Linux bootstrap also passed its download/upgrade/rollback checks. See
-[validation notes](docs/validation.md) for exact runs and remaining limitations.
+Native integration tests and Go vet passed on hosted Windows, macOS and Ubuntu.
+Fresh Debian 12/13 containers passed default signed-source installation,
+extension loading, candidate upgrades and rollback. See [validation notes](docs/validation.md)
+for exact runs and remaining limitations. Source-build and signing operations are
+documented in the [build guide](build/linux/README.zh-CN.md) and
+[distribution guide](docs/distribution.zh-CN.md).
 
-The manual `Debian PHP source build (stage A)` workflow prepares PHP/Redis/SDK
-archives and runs fresh-container checks before exporting unpublished, unsigned
-artifacts. It does not change the CLI's Linux download source or publish Releases.
-The [first successful source build](https://github.com/longyongzhong/phpm/actions/runs/40666487813)
-passed SDK relocation/rebuilding and fresh-container runtime/FPM checks on Debian
-13 x64. See the [source-build guide](build/linux/README.zh-CN.md) for its scope.
-
-The signed provider adds `source add/list`, custom `php install --source NAME`,
-matching extension acquisition, source-preserving upgrade candidates and
-`install --frozen --source NAME` for exact artifact restoration. See the
-[distribution guide](docs/distribution.zh-CN.md) for key trust, offline signing,
-the draft workflow and current production limitations. Default Linux downloads
-use PHPM's signed source with an embedded public root; no publishing private key
-is bundled. StaticPHP requires explicit selection.
-
-The [stage-C VM acceptance](build/linux/vm/README.zh-CN.md) passed a real
-8.4.27 -> 8.5.12 -> 8.4.27 lifecycle in an independent Debian kernel, including
-MySQL/Redis, both FPM versions, preserved old processes and exact project-file
-rollback. It is a built-in fixture with a bounded soak, not business acceptance
-or production service deployment.
-
-## Build
-
-Requires Go 1.23 or newer. The only application dependency is
-`gopkg.in/yaml.v3`, pinned in `go.mod`/`go.sum`.
-
-```sh
-go build -o bin/phpm ./cmd/phpm
-go test ./...
-go vet ./...
-```
-
-On Windows use `go build -o bin/phpm.exe ./cmd/phpm`.
-Put the binary on PATH yourself, or invoke it by its full path.
-
-## Quick start
-
-Run these commands inside your project; `phpm` below refers to the built binary:
-
-```sh
-phpm init --php 8.4
-# Windows x64: defaults to NTS; add --ts for a thread-safe build.
-phpm php install 8.4
-phpm install
-phpm exec -- php -v
-phpm exec -- php --ini
-phpm verify
-```
+## Runtime sources and local imports
 
 Debian 12/13 x64 uses the same install commands with PHPM's built-in signed
 catalog; root authorization and package hashes are verified without manual source
@@ -148,12 +210,16 @@ downloads from the official PHP Windows extension directory, and probes the DLL.
 It preserves the existing locked PHP build and other matching locked extensions.
 It then verifies the complete environment and updates **both** `phpm.yaml` and
 `phpm.lock`; no separate `install` command or manual YAML edit is needed.
-It requires an existing project and an installed PHP runtime.
+It requires an existing project and an installed PHP runtime. The Xdebug,
+MongoDB and exact-version examples above require matching Windows archives.
+Signed Debian catalogs supply Redis and xlswriter tied to the exact PHP build;
+`phpm ext install xlswriter` uses the catalog of the project runtime.
 
 When no version is supplied, numeric release directories are checked newest first
 until one lists a matching archive. Prereleases are excluded. A matching archive
 that fails to load causes an error, not a silent fallback to an older version.
-Extensions unavailable in that official directory require `ext import` instead.
+Extensions unavailable from the selected provider require a compatible local
+binary and `ext import` instead.
 For bundled modules the version belongs to the selected PHP build. Compiled-in
 modules such as JSON are recorded as requirements without a separate download.
 
@@ -277,6 +343,8 @@ by a shell automatically.
 
 Commit `phpm.yaml` **and `phpm.lock`**. Lock entries are platform-specific and
 record build IDs/digests, PHP API/build data, extension loader modes and provenance.
+For signed-catalog locks, `phpm install --frozen --source phpm` restores exact
+artifacts; use the corresponding source name for a custom catalog.
 Local imports must be supplied independently on another machine; the lock is not
 a binary distribution service or a promise of bit-for-bit source rebuilds.
 Multiple builds of the same PHP patch require `runtime: <ID>` in the manifest.
@@ -348,9 +416,9 @@ detected before committing; PHPM edits use the existing transaction safeguards.
 Existing extension version mismatches and PHP/system-library failures require
 explicit resolution first. PHP and existing extension versions are not implicitly
 upgraded. Use, for example, `phpm ext install redis@6.2.0` to explicitly change an
-existing extension. Batch downloads use the existing Windows x64 provider;
-Linux/macOS retain bundled-module support without automatic source builds;
-the explicit signed Debian provider can also acquire its matching Redis package.
+existing extension. Batch downloads support the Windows x64 provider and matching
+Redis/xlswriter packages from signed Debian catalogs. Other Linux/macOS builds
+retain bundled modules and compatible local imports without client-side compilation.
 `--missing` targets the current environment only and cannot be combined with an
 extension name, checksum pin or loader option.
 
@@ -400,6 +468,21 @@ integrity against the trusted HTTPS catalog, not an independent publisher signat
 PHPM neither deploys applications nor provides Docker-equivalent security or
 operating-system dependency isolation. Removing a source installation is not safe
 if your imported build still links to libraries at its original location.
+
+## Build from source
+
+Development requires Go 1.23 or newer; release clients do not need Go.
+The application dependency `gopkg.in/yaml.v3` is pinned in `go.mod`/`go.sum`.
+
+```sh
+go build -o bin/phpm ./cmd/phpm
+go test ./...
+go vet ./...
+```
+
+On Windows use `go build -o bin/phpm.exe ./cmd/phpm`.
+Source builds report `0.1.0-dev` unless a release version is injected.
+Put the binary on PATH yourself, or invoke it by its full path.
 
 ## Development
 

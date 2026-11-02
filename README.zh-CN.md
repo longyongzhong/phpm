@@ -1,25 +1,124 @@
-# PHPM
-
-Linux 官方源码构建已在 GitHub Actions 完成首次验证，面向 Debian 13 x64，
-通过 SDK 迁移重编译、运行时、扩展和 FPM 检查。
-操作和范围见 [构建说明](build/linux/README.zh-CN.md)。阶段 B 另提供显式可信源安装、
-签名目录和锁文件精确恢复，见 [分发与安装](docs/distribution.zh-CN.md)。
-当前源码将 Linux 默认来源改为内置根公钥验证的 PHPM 自建签名源，
-使用方式见 [默认来源说明](docs/default-source.zh-CN.md)。此变更已随
-[rc.3 预发布版](https://github.com/longyongzhong/phpm/releases/tag/v0.1.0-rc.3)公开，需要更新客户端；
-已发布 rc.2 仍使用原来的显式注册流程。生产服务部署尚未自动化。
-Debian 12/13 预编译包和 xlswriter 已纳入公开候选版 rc.2，范围见
-[预编译扩展说明](docs/precompiled-extensions.zh-CN.md)，安装步骤见
-[Debian 12/13 测试指南](docs/linux-test-rc2.zh-CN.md)。
-
-阶段 C 已在独立 Debian VM 中完成真实 8.4.27 → 8.5.12 → 回退，验证 MySQL、Redis、
-FPM 与旧进程保持原版本；范围和运行方式见 [VM 验收说明](build/linux/vm/README.zh-CN.md)。
-这轮使用内置用例，实际业务项目尚未验证。
+# PHPM — PHP 运行时与扩展管理器
 
 [English](README.md)
 
-PHPM 为每个项目生成独立的 PHP CLI 环境，跨项目共享 PHP 构建与兼容扩展。
-当前版本为 **0.1.0-dev**，已实现首个可运行闭环，不是生产部署工具。
+为每个项目选择 PHP 版本、安装原生扩展、运行 Composer，并在测试后切换或回退 PHP。
+运行时与扩展存放在共享仓库，项目通过 `phpm.yaml` 和 `phpm.lock` 固定自己的环境。
+通过 `phpm exec` 启动的程序使用项目 PHP，不修改系统 PHP 或已有服务。
+
+当前可下载版本：[**0.1.0-rc.3**](https://github.com/longyongzhong/phpm/releases/tag/v0.1.0-rc.3)，属于预发布版，供功能验收。
+
+## 快速开始
+
+流程：**下载 PHPM → 安装 PHP → 初始化项目 → 安装扩展 → 运行程序**。
+PHPM 客户端启动不依赖预装 PHP 或 Go。
+
+### 1. 下载 PHPM
+
+| 系统 | 客户端与默认 PHP 来源 |
+|---|---|
+| Windows x64 | Windows 客户端，默认下载 PHP 官方 Windows 包 |
+| Debian 12/13 x86_64 | Linux 客户端，默认下载 PHPM 自建签名包，无需手动注册源 |
+| 其他 Linux x86_64 | 可显式尝试 `--provider staticphp`；不能使用 Debian 自建包 |
+| macOS / 其他架构 | 暂无对应发行客户端；自行构建并导入兼容 PHP，见后文 |
+
+**Windows PowerShell**：以下命令使用一个新的安装目录，下载、核对 SHA-256 并解压。
+
+```powershell
+$phpmInstallDir = Join-Path $HOME 'phpm-0.1.0-rc.3'
+New-Item -ItemType Directory -Path $phpmInstallDir -ErrorAction Stop | Out-Null
+Invoke-WebRequest -Uri 'https://github.com/longyongzhong/phpm/releases/download/v0.1.0-rc.3/phpm-0.1.0-rc.3-windows-amd64.zip' -OutFile "$phpmInstallDir\phpm.zip" -ErrorAction Stop
+if ((Get-FileHash "$phpmInstallDir\phpm.zip" -Algorithm SHA256).Hash -ne '8c84ea192a26b0c803657ae9c3a0a8f944c228015544c0622482f96c1a6766b3') { throw 'PHPM SHA-256 mismatch' }
+Expand-Archive -Path "$phpmInstallDir\phpm.zip" -DestinationPath $phpmInstallDir -ErrorAction Stop
+$env:PATH = "$phpmInstallDir;$env:PATH"
+phpm version
+```
+
+**Debian 12/13 x86_64**：先准备 [系统运行库](docs/linux-test-rc2.zh-CN.md#准备系统运行库)，
+然后使用以下命令。下载步骤使用 `curl`、`tar` 和 `sha256sum`。
+
+```sh
+mkdir -p "$HOME/phpm-0.1.0-rc.3" &&
+cd "$HOME/phpm-0.1.0-rc.3" &&
+curl -fL --retry 3 -o phpm.tar.gz https://github.com/longyongzhong/phpm/releases/download/v0.1.0-rc.3/phpm-0.1.0-rc.3-linux-amd64.tar.gz &&
+printf '%s\n' '07daa0913b4e15f05a0ec6ad54c898a19d01771e25dc587f94a4d4fa4c7f5170  phpm.tar.gz' | sha256sum -c - &&
+tar -xzf phpm.tar.gz &&
+export PATH="$PWD:$PATH" &&
+phpm version
+```
+
+成功后 `phpm version` 输出 `0.1.0-rc.3`。上述 PATH 设置仅对当前终端有效；
+长期使用可将解压目录加入用户 PATH，或使用可执行文件的完整路径。
+这里的 SHA-256 用于核对指定发行包；独立根授权验签安装见 [签名安装说明](docs/offline-release.zh-CN.md)。
+
+### 2. 创建项目 PHP 环境
+
+在同一个终端进入业务项目目录。也可以先创建一个空目录 `phpm-demo` 体验。
+以下命令适用于 Windows x64 和 Debian 12/13 x86_64：
+
+```sh
+phpm php install 8.4       # 下载 PHP 到共享仓库，不切换系统 PHP
+phpm init --php 8.4       # 在当前目录创建 phpm.yaml；已有配置时跳过
+phpm install             # 生成 phpm.lock 和项目环境
+phpm exec -- php -v      # 查看项目实际使用的 PHP
+phpm verify              # 检查产物完整性和实际加载情况
+```
+
+`php install` 负责取得运行时，`install` 负责按项目配置组装环境。
+日常使用 `phpm exec -- php ...`；直接输入 `php` 仍由终端原来的 PATH 决定。
+
+### 3. 安装扩展并运行程序
+
+继续在项目目录执行。扩展安装成功后会自动更新配置和锁文件，无需再执行 `install`：
+
+```sh
+phpm ext install pdo_mysql    # MySQL PDO 驱动
+phpm ext install redis       # 与项目 PHP 匹配的 Redis 扩展
+phpm exec -- php --ri redis  # 查看扩展加载信息
+phpm exec -- php -m          # 列出项目实际加载的全部模块
+phpm exec -- php your-script.php
+```
+
+把 `your-script.php` 换成自己的入口文件。Debian 自建源还提供
+`phpm ext install xlswriter`。扩展安装作用于当前项目，不会替所有项目启用。
+
+### 4. 已有 Composer 项目
+
+先完成上面的 PHP 环境初始化，并准备能在项目 PHP 下运行的 Composer 2 PHAR。
+PHPM 可从 PATH 中发现 Composer；找不到时通过 `PHPM_COMPOSER` 指定可信 PHAR 的绝对路径，
+例如 PowerShell 用 `$env:PHPM_COMPOSER = 'D:\tools\composer.phar'`，
+Linux 用 `export PHPM_COMPOSER=/opt/tools/composer.phar`。
+
+```sh
+phpm ext check               # 检查 composer.json / composer.lock 的 PHP 和扩展要求
+phpm ext install --missing   # 一次安装当前来源支持的缺失扩展
+phpm composer install        # 使用项目 PHP 安装 Composer 依赖
+```
+
+`ext check` 发现缺失项时会返回非零退出码。`--missing` 不会自动编译扩展，
+也不处理 PHP 版本不符或已有扩展版本冲突；详情见 [Composer 集成](#composer-集成)。
+将 `phpm.yaml` 和 `phpm.lock` 一起提交到版本控制。
+
+## 常用命令
+
+| 目的 | 命令 |
+|---|---|
+| 查看帮助 | `phpm --help` |
+| 查看当前来源可下载的 PHP | `phpm php available` |
+| 查看已经安装/导入的 PHP | `phpm php list` |
+| 运行项目 PHP | `phpm exec -- php your-script.php` |
+| 查看已存储的扩展构建 | `phpm ext list` |
+| 查看项目实际加载的模块 | `phpm exec -- php -m` |
+| 安装缺失的 Composer 扩展 | `phpm ext install --missing` |
+| 运行 Composer | `phpm composer install` |
+| 检查当前环境 | `phpm verify` |
+| 准备 PHP 8.5 候选环境 | `phpm php upgrade 8.5` |
+| 比较与测试候选环境 | `phpm diff`、`phpm exec --candidate -- php -v` |
+| 切换到已测试的候选 | `phpm activate 候选ID` |
+| 恢复上一个环境 | `phpm rollback` |
+
+升级、激活和回滚的完整流程见 [PHP 安全升级、切换与回滚](#php-安全升级切换与回滚)。
+切换只影响后续启动的进程，已有 FPM、队列等进程需要另行重启。
 
 ## 已实现
 
@@ -37,34 +136,11 @@ PHPM 为每个项目生成独立的 PHP CLI 环境，跨项目共享 PHP 构建�
 - `composer` 使用项目 PHP 快速运行 Composer；`ext check` 检查 Composer 声明及锁文件中的平台要求。
 - `ext install --missing` 按 Composer 约束批量安装缺失扩展，验证成功后统一提交项目配置。
 
-Linux x64 已接入预编译静态 PHP 获取；macOS 和其他 Linux 架构仍使用本地导入，自动源码构建尚未实现。
+Linux x64 支持自建 Debian 签名包和显式 StaticPHP；macOS 和其他 Linux 架构仍使用本地导入。
+维护者已有源码构建工作流，客户端现场编译尚未实现。
 本地已交叉编译不等于对应平台通过真实运行验证，详见 [验证记录](docs/validation.md)。
 
-## 构建
-
-需要 Go 1.23 或更新版本：
-
-```powershell
-go build -o bin/phpm.exe ./cmd/phpm
-go test ./...
-go vet ./...
-```
-
-Linux/macOS 将输出文件名改为 `bin/phpm`。
-以下示例假定自行将构建产物加入 PATH；也可使用可执行文件的完整路径。
-
-## Windows 快速开始
-
-在业务项目目录执行：
-
-```powershell
-phpm init --php 8.4
-phpm php install 8.4
-phpm install
-phpm exec -- php -v
-phpm exec -- php --ini
-phpm verify
-```
+## Windows 与本地 PHP 导入
 
 默认安装 NTS；TS 使用 `phpm php install 8.4 --ts`。
 只使用官方当前目录中存在的版本，不会把不存在的精确版本悄悄替换成其他补丁。
@@ -86,22 +162,12 @@ phpm php import /opt/portable-php --binary bin/php
 导入目录必须是不含符号链接、特殊文件的可迁移分发目录。不要导入 `/usr`，
 也不要导入包含 PHPM_HOME 的目录。工具不会自动打包系统动态库或修复绝对链接路径。
 
-## Linux x64 从零安装
+## Linux 来源与兼容性
 
-Debian 12/13 x64 准备好 [系统运行库](docs/linux-test-rc2.zh-CN.md#准备系统运行库)后使用同样的命令：
-
-```sh
-phpm php available
-phpm init --php 8.4
-phpm php install 8.4
-phpm install
-phpm ext install xlswriter
-phpm ext install redis
-phpm exec -- php -v
-```
-
-首次访问会验证客户端固定的根公钥、授权、目录和包摘要。完整规则见
-[默认来源说明](docs/default-source.zh-CN.md)，已发布 rc.2 的显式注册流程保持不变。
+Debian 12/13 x64 使用开头的快速开始流程。首次访问会验证客户端固定的根公钥、
+授权、目录和包摘要，完整规则见 [默认来源说明](docs/default-source.zh-CN.md)。
+rc.3 客户端默认使用已验收的 rc.2 PHP 包目录，客户端版本与目录版本相互独立；
+旧版 rc.2 客户端仍需要显式注册签名源。
 
 其他 Linux x64（例如 iStoreOS/OpenWrt）若要尝试社区静态构建，需显式选择：
 
@@ -154,8 +220,8 @@ phpm ext install opcache
 ```
 
 自带模块版本由 PHP 构建决定；JSON 等静态模块无需下载，只记录项目要求。
-在线第三方扩展支持 Windows x64 官方目录 ZIP，以及显式签名 Debian 源中绑定精确
-PHP 构建的 Redis 包。其他 Linux/macOS 可启用自带模块或使用本地导入，客户端不做现场源码编译。
+在线第三方扩展支持 Windows x64 官方目录 ZIP，以及 Debian 签名源中绑定精确
+PHP 构建的 Redis、xlswriter 包。上方 Xdebug、MongoDB 和精确版本示例适用于有匹配产物的 Windows 构建。其他 Linux/macOS 可启用自带模块或使用本地导入，客户端不做现场源码编译。
 
 官方扩展目录没有统一发布校验值。首次下载信任官方 HTTPS 来源，并记录实际
 SHA-256，后续使用缓存时重新核对；可加 `--sha256 HASH` 强制匹配独立获得的
@@ -216,8 +282,9 @@ phpm info
 | `verify` / `doctor` | 当前执行相同的完整性及实际加载检查，诊断能力尚为基础版 |
 | `exec -- php ...` | 使用项目 PHP 和配置运行，保留当前工作目录及应用退出码 |
 
-锁文件不会自动获取缺失的运行时或扩展。本地导入的相同构建需要在另一台机器
-单独提供。`phpm.yaml` 和 `phpm.lock` 应一起提交版本控制。
+普通 `install` 不会自动获取缺失产物。签名源锁可使用
+`phpm install --frozen --source phpm` 恢复其精确构建；自定义源使用对应名称。
+本地导入的相同构建需要在另一台机器单独提供。`phpm.yaml` 和 `phpm.lock` 应一起提交版本控制。
 
 普通嵌套 `php` 继承环境；显式绝对路径、`-n`、`-c`、`-d` 或程序重写环境变量
 可以改变实际行为。PHPM 不是安全沙箱，也不会自动通过 shell 执行 Windows 批处理。
@@ -290,8 +357,8 @@ phpm composer install
 已有扩展版本不符、PHP/系统库要求不符、Composer 锁文件过期或无法验证时会拒绝
 自动安装并说明原因；它不会顺带升级 PHP 或现有扩展。需要变更已有扩展时，明确
 执行例如 `phpm ext install redis@6.2.0`。没有 Composer 锁文件时仅处理根项目要求，
-会提示间接依赖未知。在线下载安装仍限现有 Windows x64 扩展后端；Linux/macOS
-仅支持现有自带模块能力，尚无自动源码编译。`--missing` 当前用于正式项目环境，
+会提示间接依赖未知。在线下载安装支持 Windows x64 官方扩展后端和 Debian 签名源中匹配的 Redis/xlswriter；
+其他 Linux/macOS 可用自带模块或兼容本地导入，尚无客户端自动源码编译。`--missing` 当前用于正式项目环境，
 不支持候选环境安装，且不能与扩展名、`--sha256` 或 `--zend` 混用。
 
 PHP 升级准备完成后，可先用 `--candidate` 检查新 PHP 的依赖兼容性，再决定激活。
@@ -347,6 +414,21 @@ phpm rollback 恢复点ID
 `rollback`。每个项目和 PHPM_HOME 保留一个候选，成功重新准备会替换它并生成新 ID。
 不要删除仍有运行中进程或恢复点依赖的运行时、扩展。
 
+## 从源码构建
+
+开发 PHPM 需要 Go 1.23 或更新版本；仅使用发行客户端无需 Go。
+
+```sh
+go build -o bin/phpm ./cmd/phpm
+go test ./...
+go vet ./...
+```
+
+Windows 使用 `go build -o bin/phpm.exe ./cmd/phpm`。
+构建与发行路线见 [Linux 源码构建](build/linux/README.zh-CN.md)、
+[GitHub 签名发布](docs/github-release.zh-CN.md) 和 [验证记录](docs/validation.md)。
+源码默认版本标识为 `0.1.0-dev`，发行构建会注入对应版本。
+
 ## 存储与限制
 
 默认目录为 `~/.phpm`，也可设置 `PHPM_HOME`，或使用
@@ -370,11 +452,11 @@ PHPM_HOME/
 值或加载路径包含换行、NUL、双引号或 `$` 时明确报错。
 
 崩溃可能遗留锁、临时目录或未引用的产物；确认锁中 PID 对应的操作已经结束后，
-才能手动清理。当前不自动删除陈旧锁、不提供垃圾回收、FPM、
+才能手动清理。当前不自动删除陈旧锁、不提供垃圾回收、FPM 服务管理、
 服务重启或完整生产部署，也不保证跨系统底层依赖完全一致。
 
 官方 Windows PHP 下载核对目录提供的 SHA-256；Windows 扩展摘要规则见上文。
-显式 Debian 签名源另验证固定公钥的 Ed25519 目录签名，使用方式和信任边界见分发说明。
+Debian 签名源另验证固定公钥的 Ed25519 目录签名，使用方式和信任边界见分发说明。
 代码采用 MIT；下载的 PHP、扩展和系统库仍遵循各自许可证。
 
 开发、验证与后续路线见 [架构说明](docs/architecture.md)、
